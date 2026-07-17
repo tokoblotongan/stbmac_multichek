@@ -1,7 +1,14 @@
 {
     "name": "mac-tester",
     "version": "1.0.0",
-    "dependencies": {
-        "node-fetch": "^2.6.7"
+    "description": "MAC Multi-Tester for Stalker Middleware",
+    "main": "index.html",
+    "scripts": {
+        "dev": "vercel dev",
+        "deploy": "vercel deploy --prod"
+    },
+    "dependencies": {},
+    "devDependencies": {
+        "vercel": "^28.0.0"
     }
 }
