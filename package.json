@@ -1,6 +1,7 @@
 {
     "name": "mac-tester",
     "version": "1.0.0",
+    "type": "module",
     "description": "MAC Multi-Tester for Stalker Middleware",
     "main": "index.html",
     "scripts": {
