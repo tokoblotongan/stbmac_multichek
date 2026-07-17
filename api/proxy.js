@@ -15,8 +15,11 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'URL parameter required' });
         }
         
+        // Decode URL
+        const decodedUrl = decodeURIComponent(url);
+        
         // Forward request ke Stalker server
-        const response = await fetch(url, {
+        const response = await fetch(decodedUrl, {
             method: req.method || 'GET',
             headers: {
                 'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
@@ -31,6 +34,10 @@ export default async function handler(req, res) {
         res.status(response.status).send(data);
         
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Proxy error:', error);
+        res.status(500).json({ 
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 }
