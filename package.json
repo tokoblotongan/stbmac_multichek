@@ -5,10 +5,10 @@
     "main": "index.html",
     "scripts": {
         "dev": "vercel dev",
+        "build": "echo 'No build needed'",
         "deploy": "vercel deploy --prod"
     },
-    "dependencies": {},
-    "devDependencies": {
-        "vercel": "^28.0.0"
+    "dependencies": {
+        "@vercel/node": "^2.0.0"
     }
 }
