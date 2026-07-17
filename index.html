@@ -1,4 +1,621 @@
-// Ganti semua fetch dengan proxy
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAC Multi-Tester Web</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        }
+        h1 {
+            font-size: 28px;
+            background: linear-gradient(135deg, #22c55e, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+        label {
+            display: block;
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            margin-top: 16px;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            color: #f1f5f9;
+            font-size: 14px;
+            font-family: monospace;
+            transition: all 0.2s;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #22c55e;
+            box-shadow: 0 0 0 3px rgba(34,197,94,0.1);
+        }
+        input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        button:hover {
+            transform: scale(0.98);
+            background: linear-gradient(135deg, #16a34a, #15803d);
+        }
+        button:active {
+            transform: scale(0.96);
+        }
+        button.danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        button.danger:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .btn-group button {
+            flex: 1;
+            min-width: 150px;
+        }
+        .result {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 20px;
+            border: 1px solid #334155;
+            max-height: 600px;
+            overflow: auto;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .badge-online { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
+        .badge-offline { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
+        .badge-best { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b40; }
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: #0f172a;
+            padding: 12px 20px;
+            border-radius: 12px;
+            flex: 1;
+            text-align: center;
+            min-width: 100px;
+        }
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        .stat-online .stat-number { color: #22c55e; }
+        .stat-offline .stat-number { color: #ef4444; }
+        .stat-best .stat-number { color: #f59e0b; }
+        .stat-total .stat-number { color: #60a5fa; }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .loading.show {
+            display: block;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #334155;
+            border-top-color: #22c55e;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .mac-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 4px 0;
+            padding: 4px;
+        }
+        .mac-row .mac-number {
+            color: #64748b;
+            font-weight: 700;
+            min-width: 30px;
+            font-size: 13px;
+        }
+        .mac-row input {
+            flex: 1;
+            max-width: 250px;
+        }
+        .mac-row .mac-status {
+            font-size: 12px;
+            min-width: 120px;
+            color: #94a3b8;
+        }
+        .option-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 12px 0;
+        }
+        .option-group label {
+            display: flex;
+            align-items: center;
+            margin: 0;
+            font-weight: 400;
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 12px 0;
+        }
+        .slider-container input[type="range"] {
+            flex: 1;
+            max-width: 300px;
+            padding: 0;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #334155;
+            border-radius: 3px;
+        }
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #22c55e;
+            cursor: pointer;
+        }
+        .slider-value {
+            color: #f1f5f9;
+            font-weight: 700;
+            min-width: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 750px;
+        }
+        table th {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 2px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #334155;
+        }
+        table tr.online-row {
+            background: #f0fdf4;
+        }
+        table tr.offline-row {
+            background: #fef2f2;
+        }
+        .best-mac-banner {
+            background: #064e3b;
+            color: #d1fae5;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        .best-mac-banner span {
+            font-weight: 700;
+        }
+        .progress-container {
+            margin: 16px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #1e293b;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e, #3b82f6);
+            transition: width 0.3s;
+            border-radius: 10px;
+        }
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .status-text {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            margin-top: 0;
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+        .tab-pane {
+            display: none;
+        }
+        .tab-pane.active {
+            display: block;
+        }
+        .separator {
+            border: 0;
+            border-top: 1px solid #334155;
+            margin: 16px 0;
+        }
+        .log-output {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #a5f3fc;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+        .log-output .error {
+            color: #ef4444;
+        }
+        .log-output .success {
+            color: #22c55e;
+        }
+        .log-output .info {
+            color: #60a5fa;
+        }
+        .proxy-info {
+            background: #1e293b;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+        .proxy-info code {
+            color: #a5f3fc;
+            background: #0f172a;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        @media (max-width: 768px) {
+            .card { padding: 16px; }
+            .mac-row { flex-wrap: wrap; }
+            .mac-row input { max-width: 100%; }
+            .btn-group button { min-width: 100%; }
+            table { font-size: 11px; min-width: 500px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>📡 MAC Multi-Tester</h1>
+        <div class="subtitle">1 Portal URL → Test banyak MAC sekaligus → Temukan yang terbaik</div>
+
+        <!-- Proxy Info -->
+        <div class="proxy-info">
+            🔄 Using proxy: <code>/api/proxy</code> (bypass CORS)
+        </div>
+
+        <!-- Portal URL -->
+        <label>🌐 Portal URL</label>
+        <input type="text" id="portalUrl" placeholder="http://domain.com:8080" 
+               style="max-width: 600px;">
+        <div style="font-size:12px; color:#64748b; margin-top:4px;">
+            Tanpa /c/ di akhir. Contoh: <code>http://domain.com:8080</code>
+        </div>
+
+        <hr class="separator">
+
+        <!-- MAC Address Inputs -->
+        <div style="font-family:monospace; margin:12px 0 4px 0;">
+            <b style="font-size:13px;">🔲 Daftar MAC Address (isi yang ingin ditest, maks 10):</b>
+        </div>
+
+        <div id="macInputs"></div>
+
+        <hr class="separator">
+
+        <!-- Options -->
+        <b style="font-family:monospace; font-size:13px;">⚙️ Opsi Test:</b>
+        <div class="option-group">
+            <label>
+                <input type="checkbox" id="chkProfile" checked>
+                Info profil (nama, expired)
+            </label>
+            <label>
+                <input type="checkbox" id="chkChannels" checked>
+                Hitung jumlah channel
+            </label>
+            <label>
+                <input type="checkbox" id="chkStream" checked>
+                Test 1 stream (cek streaming aktif)
+            </label>
+            <label>
+                <input type="checkbox" id="chkExport" checked>
+                Export hasil ke CSV
+            </label>
+        </div>
+
+        <div class="slider-container">
+            <label style="margin:0; font-weight:400; color:#cbd5e1;">Paralel:</label>
+            <input type="range" id="parallelSlider" min="1" max="10" value="5">
+            <span class="slider-value" id="parallelValue">5</span>
+            <span style="font-size:11px; color:#6b7280;">Jumlah MAC yang ditest bersamaan</span>
+        </div>
+
+        <hr class="separator">
+
+        <!-- Buttons -->
+        <div class="btn-group">
+            <button id="btnRun">🚀 RUN TEST SEMUA MAC</button>
+            <button class="danger" id="btnClear">🗑️ Clear</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width:0%"></div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+            <div class="status-text" id="statusLabel">✅ Siap — isi portal dan MAC lalu klik RUN</div>
+        </div>
+
+        <!-- Result Tabs -->
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="switchTab('result')">📊 Hasil</button>
+            <button class="tab-btn" onclick="switchTab('log')">📋 Log</button>
+        </div>
+
+        <div id="tab-result" class="tab-pane active">
+            <div id="resultContainer"></div>
+        </div>
+        <div id="tab-log" class="tab-pane">
+            <div class="log-output" id="logContainer">📝 Log akan muncul di sini...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+//  CONFIGURATION
+// ============================================================
+const PROXY_API = '/api/proxy';  // Vercel serverless function
+
+// ============================================================
+//  GLOBAL VARIABLES
+// ============================================================
+const MAX_MAC = 10;
+const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+let isRunning = false;
+
+// ============================================================
+//  UI INITIALIZATION
+// ============================================================
+function initUI() {
+    const container = document.getElementById('macInputs');
+    container.innerHTML = '';
+    
+    for (let i = 0; i < MAX_MAC; i++) {
+        const row = document.createElement('div');
+        row.className = 'mac-row';
+        
+        const num = document.createElement('span');
+        num.className = 'mac-number';
+        num.textContent = `${i+1}.`;
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = '00:1A:79:XX:XX:XX';
+        input.id = `mac_${i}`;
+        input.dataset.index = i;
+        
+        const status = document.createElement('span');
+        status.className = 'mac-status';
+        status.id = `status_${i}`;
+        status.textContent = '—';
+        
+        row.appendChild(num);
+        row.appendChild(input);
+        row.appendChild(status);
+        container.appendChild(row);
+    }
+    
+    // Parallel slider
+    const slider = document.getElementById('parallelSlider');
+    const valueDisplay = document.getElementById('parallelValue');
+    slider.addEventListener('input', function() {
+        valueDisplay.textContent = this.value;
+    });
+}
+
+// ============================================================
+//  TAB SWITCHING
+// ============================================================
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+    
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.textContent.includes(tabName === 'result' ? '📊 Hasil' : '📋 Log')) {
+            btn.classList.add('active');
+        }
+    });
+    
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+}
+
+// ============================================================
+//  LOGGING
+// ============================================================
+function addLog(message, type = 'info') {
+    const logContainer = document.getElementById('logContainer');
+    const timestamp = new Date().toLocaleTimeString();
+    const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+    const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+    const line = `<span class="${className}">[${timestamp}] ${prefix} ${message}</span>`;
+    logContainer.innerHTML += line + '\n';
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+function clearLog() {
+    document.getElementById('logContainer').innerHTML = '📝 Log akan muncul di sini...\n';
+}
+
+// ============================================================
+//  VALIDATION
+// ============================================================
+function validateURL(url) {
+    try {
+        const urlObj = new URL(url);
+        return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function formatMAC(mac) {
+    return mac.trim().toUpperCase().replace(/-/g, ':');
+}
+
+function getMACs() {
+    const macs = [];
+    for (let i = 0; i < MAX_MAC; i++) {
+        const input = document.getElementById(`mac_${i}`);
+        const val = input.value.trim();
+        if (!val) continue;
+        
+        const formatted = formatMAC(val);
+        if (!MAC_REGEX.test(formatted)) {
+            document.getElementById(`status_${i}`).textContent = '⚠️ Format salah';
+            document.getElementById(`status_${i}`).style.color = '#f59e0b';
+            continue;
+        }
+        
+        macs.push({
+            index: i,
+            mac: formatted,
+            raw: val
+        });
+    }
+    return macs;
+}
+
+// ============================================================
+//  PROXY REQUEST FUNCTION
+// ============================================================
+async function proxyRequest(url, options = {}) {
+    const proxyUrl = `${PROXY_API}?url=${encodeURIComponent(url)}`;
+    
+    const response = await fetch(proxyUrl, {
+        method: options.method || 'GET',
+        headers: options.headers || {},
+        body: options.body || null,
+        credentials: 'omit'
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch {
+        return text;
+    }
+}
+
+// ============================================================
+//  STALKER API FUNCTIONS (with proxy)
+// ============================================================
 async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const url = new URL(`${portal}/portal.php`);
     url.search = new URLSearchParams({
@@ -8,20 +625,537 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         JsHttpRequest: '1-xml'
     });
     
-    // 🔥 Gunakan proxy
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url.toString())}`;
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': `${portal}/portal.php`,
+        ...session.headers
+    };
     
-    const response = await fetch(proxyUrl, {
-        method: 'GET',
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Referer': `${portal}/portal.php`,
-            ...session.headers
-        },
-        credentials: 'omit'
+    // Gunakan proxy untuk menghindari CORS
+    const result = await proxyRequest(url.toString(), { headers });
+    
+    if (typeof result === 'string') {
+        throw new Error('Invalid response from server');
+    }
+    
+    return result;
+}
+
+async function doHandshake(portal, mac) {
+    try {
+        const result = await stalkerRequest(portal, 
+            { type: 'stb', action: 'handshake' },
+            {},
+            { headers: { 'Cookie': `mac=${mac}; stb_lang=en; timezone=Europe/Amsterdam` } }
+        );
+        return result.js?.token || null;
+    } catch (error) {
+        addLog(`Handshake failed for ${mac}: ${error.message}`, 'error');
+        return null;
+    }
+}
+
+async function getProfile(portal, token) {
+    try {
+        const result = await stalkerRequest(portal,
+            { type: 'account_info', action: 'get_main_info' },
+            {},
+            { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        const js = result.js || {};
+        const name = `${js.fname || ''} ${js.lname || ''}`.trim() || js.login || '';
+        const expire = js.end_date || js.expire_date || '';
+        const status = js.status || js.account_status || '';
+        return { name, expire, status };
+    } catch {
+        return { name: '', expire: '', status: '' };
+    }
+}
+
+async function countChannels(portal, token) {
+    try {
+        const result = await stalkerRequest(portal,
+            { type: 'itv', action: 'get_all_channels' },
+            {},
+            { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        const data = result.js?.data || [];
+        if (Array.isArray(data)) return data.length;
+        return 0;
+    } catch {
+        try {
+            const result = await stalkerRequest(portal,
+                { type: 'itv', action: 'get_ordered_list' },
+                { genre: '*', p: '1' },
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            const js = result.js || {};
+            return js.total_items || js.data?.length || 0;
+        } catch {
+            return 0;
+        }
+    }
+}
+
+async function testStream(portal, token) {
+    try {
+        // Get first channel
+        const listResult = await stalkerRequest(portal,
+            { type: 'itv', action: 'get_ordered_list' },
+            { genre: '*', p: '1' },
+            { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        
+        const data = listResult.js?.data || [];
+        if (!data.length) return { ok: false, url: '' };
+        
+        const cmd = data[0].cmd;
+        if (!cmd) return { ok: false, url: '' };
+        
+        // Create stream link
+        const linkResult = await stalkerRequest(portal,
+            { type: 'itv', action: 'create_link' },
+            { cmd: encodeURIComponent(cmd) },
+            { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        
+        const raw = (linkResult.js?.cmd || linkResult.js?.url || '').toString();
+        const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
+        const streamUrl = urlMatch ? urlMatch[1] : '';
+        
+        if (!streamUrl) return { ok: false, url: '' };
+        
+        // Test stream melalui proxy
+        try {
+            const testResponse = await fetch(streamUrl, {
+                method: 'HEAD',
+                headers: { 
+                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3' 
+                },
+                credentials: 'omit'
+            });
+            return { ok: testResponse.ok || testResponse.status === 206, url: streamUrl };
+        } catch {
+            // Jika HEAD gagal, coba GET range
+            try {
+                const testResponse = await fetch(streamUrl, {
+                    method: 'GET',
+                    headers: { 
+                        'Range': 'bytes=0-1024',
+                        'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3'
+                    },
+                    credentials: 'omit'
+                });
+                return { ok: testResponse.ok || testResponse.status === 206, url: streamUrl };
+            } catch {
+                return { ok: false, url: streamUrl };
+            }
+        }
+    } catch (error) {
+        return { ok: false, url: '' };
+    }
+}
+
+// ============================================================
+//  TEST ONE MAC
+// ============================================================
+async function testOneMAC(portal, mac, index, options) {
+    const result = {
+        no: index + 1,
+        mac: mac,
+        online: false,
+        token: '',
+        name: '',
+        expire: '',
+        acc_status: '',
+        channels: 0,
+        stream_ok: false,
+        stream_url: '',
+        ping_ms: 0,
+        error: ''
+    };
+    
+    try {
+        const startTime = performance.now();
+        const token = await doHandshake(portal, mac);
+        const ping = Math.round(performance.now() - startTime);
+        
+        result.ping_ms = ping;
+        result.token = token ? token.substring(0, 16) + '...' : '(no token)';
+        result.online = !!token;
+        
+        if (!token) {
+            result.error = 'Handshake failed';
+            return result;
+        }
+        
+        if (options.profile) {
+            const profile = await getProfile(portal, token);
+            result.name = profile.name;
+            result.expire = profile.expire;
+            result.acc_status = profile.status;
+        }
+        
+        if (options.channels) {
+            result.channels = await countChannels(portal, token);
+        }
+        
+        if (options.stream) {
+            const stream = await testStream(portal, token);
+            result.stream_ok = stream.ok;
+            result.stream_url = stream.url;
+        }
+        
+    } catch (error) {
+        result.error = error.message.substring(0, 80);
+        result.online = false;
+    }
+    
+    return result;
+}
+
+// ============================================================
+//  RENDER TABLE
+// ============================================================
+function renderTable(results, portal, options) {
+    const online = results.filter(r => r.online);
+    const offline = results.filter(r => !r.online);
+    const sorted = [...online.sort((a, b) => b.channels - a.channels), ...offline];
+    
+    const best = online.length ? online.reduce((a, b) => a.channels > b.channels ? a : b) : null;
+    
+    const onlineCount = online.length;
+    const totalCount = results.length;
+    
+    let html = `
+        <div style="font-family:monospace; margin-bottom:16px;">
+            <div style="font-size:13px; color:#6b7280; margin-bottom:6px;">
+                Portal: <b style="color:#f8fafc;">${portal}</b>
+            </div>
+            <div style="font-size:13px; margin-bottom:10px;">
+                Total MAC: <b>${totalCount}</b> &nbsp;|&nbsp;
+                <span style="color:#22c55e; font-weight:700;">✅ Online: ${onlineCount}</span>
+                &nbsp;|&nbsp;
+                <span style="color:#ef4444; font-weight:700;">❌ Gagal: ${totalCount - onlineCount}</span>
+            </div>
+    `;
+    
+    if (best) {
+        html += `
+            <div class="best-mac-banner">
+                🏆 <b>MAC Terbaik:</b> &nbsp;
+                <span style="font-size:15px; letter-spacing:1px;">${best.mac}</span>
+                &nbsp;|&nbsp; Channel: <b>${best.channels}</b>
+                &nbsp;|&nbsp; Ping: <b>${best.ping_ms} ms</b>
+                ${best.stream_ok ? '&nbsp;|&nbsp; Stream: <b>✅ HIDUP</b>' : ''}
+            </div>
+        `;
+    }
+    
+    html += `
+        <div style="overflow-x:auto; max-height:500px; overflow-y:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="text-align:center; width:35px;">No</th>
+                        <th style="text-align:left; width:170px;">MAC Address</th>
+                        <th style="text-align:left; width:100px;">Status</th>
+                        <th style="text-align:left; width:120px;">Nama Akun</th>
+                        <th style="text-align:left; width:110px;">Expired</th>
+                        <th style="text-align:center; width:80px;">Channel</th>
+                        <th style="text-align:center; width:90px;">Stream</th>
+                        <th style="text-align:center; width:70px;">Ping</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    sorted.forEach(r => {
+        const isOnline = r.online;
+        const bg = isOnline ? '#f0fdf4' : '#fef2f2';
+        const statusColor = isOnline ? '#16a34a' : '#dc2626';
+        const statusText = isOnline ? '✅ ONLINE' : '❌ GAGAL';
+        
+        const expireColor = getExpireColor(r.expire);
+        
+        let streamCell = '';
+        if (!options.stream) {
+            streamCell = '<td style="text-align:center; color:#6b7280;">—</td>';
+        } else if (r.stream_ok) {
+            streamCell = '<td style="text-align:center; color:#16a34a; font-weight:700;">✅ HIDUP</td>';
+        } else {
+            streamCell = '<td style="text-align:center; color:#dc2626; font-weight:700;">❌ MATI</td>';
+        }
+        
+        const channelCell = `<td style="text-align:center; font-weight:700;">${options.channels ? r.channels : '—'}</td>`;
+        
+        const errorHtml = r.error ? `<br><span style="color:#ef4444; font-size:11px;">${r.error}</span>` : '';
+        
+        html += `
+            <tr style="background:${bg};">
+                <td style="text-align:center; color:#6b7280;">${r.no}</td>
+                <td style="font-family:monospace; font-weight:700; font-size:13px;">${r.mac}</td>
+                <td style="font-weight:700; color:${statusColor};">${statusText}${errorHtml}</td>
+                <td>${r.name || '—'}</td>
+                <td style="color:${expireColor}; font-weight:600;">${r.expire || '—'}</td>
+                ${channelCell}
+                ${streamCell}
+                <td style="text-align:center; color:#6b7280; font-size:12px;">${r.ping_ms} ms</td>
+            </tr>
+        `;
     });
     
-    const text = await response.text();
-    return JSON.parse(text);
+    html += `
+                </tbody>
+            </table>
+        </div>
+    </div>`;
+    
+    return html;
 }
+
+function getExpireColor(expire) {
+    if (!expire || expire === '—') return '#6b7280';
+    
+    try {
+        const date = new Date(expire);
+        if (!isNaN(date)) {
+            return date < new Date() ? '#dc2626' : '#16a34a';
+        }
+    } catch {
+        // Ignore
+    }
+    return '#6b7280';
+}
+
+// ============================================================
+//  EXPORT CSV
+// ============================================================
+function exportCSV(results, portal) {
+    const headers = ['No', 'MAC', 'Portal', 'Status', 'Nama', 'Expired', 'Acc Status', 'Channel', 'Stream', 'Ping (ms)', 'Error'];
+    const rows = results.map(r => [
+        r.no,
+        r.mac,
+        portal,
+        r.online ? 'ONLINE' : 'GAGAL',
+        r.name,
+        r.expire,
+        r.acc_status,
+        r.channels,
+        r.stream_ok ? 'OK' : (r.stream_ok === false ? 'MATI' : '—'),
+        r.ping_ms,
+        r.error
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '').substring(0, 15);
+    link.href = URL.createObjectURL(blob);
+    link.download = `mac_test_${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    
+    addLog(`📊 CSV exported: mac_test_${timestamp}.csv`, 'success');
+}
+
+// ============================================================
+//  MAIN RUN FUNCTION
+// ============================================================
+async function runTest() {
+    if (isRunning) {
+        addLog('⚠️ Test sedang berjalan, tunggu sampai selesai', 'error');
+        return;
+    }
+    
+    // Reset UI
+    document.getElementById('resultContainer').innerHTML = '';
+    clearLog();
+    
+    // Validate portal
+    const portal = document.getElementById('portalUrl').value.trim().replace(/\/+$/, '');
+    if (!validateURL(portal)) {
+        addLog('❌ Portal URL tidak valid', 'error');
+        document.getElementById('statusLabel').textContent = '❌ Portal URL tidak valid';
+        return;
+    }
+    
+    // Get MACs
+    const macList = getMACs();
+    if (!macList.length) {
+        addLog('⚠️ Tidak ada MAC valid', 'error');
+        document.getElementById('statusLabel').textContent = '⚠️ Tidak ada MAC valid';
+        return;
+    }
+    
+    // Reset MAC status
+    macList.forEach(({ index }) => {
+        const statusEl = document.getElementById(`status_${index}`);
+        statusEl.textContent = '⏳ Menunggu...';
+        statusEl.style.color = '#60a5fa';
+    });
+    
+    // Get options
+    const options = {
+        profile: document.getElementById('chkProfile').checked,
+        channels: document.getElementById('chkChannels').checked,
+        stream: document.getElementById('chkStream').checked,
+        exportCSV: document.getElementById('chkExport').checked
+    };
+    
+    const parallel = parseInt(document.getElementById('parallelSlider').value);
+    
+    // Start test
+    isRunning = true;
+    document.getElementById('btnRun').disabled = true;
+    document.getElementById('btnRun').textContent = '⏳ Testing...';
+    document.getElementById('statusLabel').textContent = `🔄 Testing ${macList.length} MAC ke ${portal}...`;
+    
+    addLog(`🚀 Starting test on ${portal}`, 'info');
+    addLog(`📊 ${macList.length} MAC | Parallel: ${parallel}`, 'info');
+    addLog(`⚙️ Profile: ${options.profile} | Channels: ${options.channels} | Stream: ${options.stream}`, 'info');
+    
+    const results = [];
+    const total = macList.length;
+    let completed = 0;
+    
+    // Process in batches
+    for (let i = 0; i < macList.length; i += parallel) {
+        const batch = macList.slice(i, i + parallel);
+        const promises = batch.map(({ index, mac }) => 
+            testOneMAC(portal, mac, index, options)
+        );
+        
+        const batchResults = await Promise.all(promises);
+        
+        batchResults.forEach((result, idx) => {
+            const macInfo = batch[idx];
+            results.push(result);
+            
+            // Update status
+            const statusEl = document.getElementById(`status_${macInfo.index}`);
+            if (result.online) {
+                const chText = options.channels ? ` | ${result.channels} ch` : '';
+                const streamText = options.stream ? (result.stream_ok ? ' | Stream ✅' : ' | Stream ❌') : '';
+                statusEl.textContent = `✅ ONLINE${chText}${streamText}`;
+                statusEl.style.color = '#16a34a';
+            } else {
+                const err = result.error ? ` — ${result.error}` : '';
+                statusEl.textContent = `❌ GAGAL${err}`;
+                statusEl.style.color = '#dc2626';
+            }
+            
+            // Log
+            const status = result.online ? '✅ ONLINE' : '❌ GAGAL';
+            let logMsg = `[${result.mac}] ${status} | ${result.ping_ms} ms`;
+            if (options.channels) logMsg += ` | ${result.channels} ch`;
+            if (options.stream) logMsg += ` | Stream: ${result.stream_ok ? 'OK' : 'MATI'}`;
+            if (result.error) logMsg += ` | ERR: ${result.error}`;
+            addLog(logMsg, result.online ? 'success' : 'error');
+        });
+        
+        completed += batch.length;
+        const progress = Math.round((completed / total) * 100);
+        document.getElementById('progressFill').style.width = `${progress}%`;
+        document.getElementById('progressText').textContent = `${progress}%`;
+        
+        const onlineNow = results.filter(r => r.online).length;
+        document.getElementById('statusLabel').textContent = 
+            `Progress: ${completed}/${total} | ✅ Online: ${onlineNow}`;
+    }
+    
+    // Display results
+    const resultContainer = document.getElementById('resultContainer');
+    resultContainer.innerHTML = renderTable(results, portal, options);
+    
+    // Export CSV
+    if (options.exportCSV) {
+        exportCSV(results, portal);
+    }
+    
+    // Final status
+    const onlineCount = results.filter(r => r.online).length;
+    document.getElementById('statusLabel').textContent = 
+        `✅ Selesai — ${results.length} MAC | Online: ${onlineCount} | Gagal: ${results.length - onlineCount}`;
+    
+    addLog(`\n${'='.repeat(50)}`, 'info');
+    addLog(`✅ Selesai: ${results.length} MAC`, 'success');
+    addLog(`✅ Online: ${onlineCount}`, 'success');
+    addLog(`❌ Gagal: ${results.length - onlineCount}`, 'error');
+    
+    isRunning = false;
+    document.getElementById('btnRun').disabled = false;
+    document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
+}
+
+// ============================================================
+//  CLEAR FUNCTION
+// ============================================================
+function clearAll() {
+    if (isRunning) {
+        if (!confirm('Test sedang berjalan. Yakin ingin membatalkan?')) return;
+        isRunning = false;
+        document.getElementById('btnRun').disabled = false;
+        document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
+    }
+    
+    document.getElementById('portalUrl').value = '';
+    for (let i = 0; i < MAX_MAC; i++) {
+        document.getElementById(`mac_${i}`).value = '';
+        const statusEl = document.getElementById(`status_${i}`);
+        statusEl.textContent = '—';
+        statusEl.style.color = '#94a3b8';
+    }
+    document.getElementById('resultContainer').innerHTML = '';
+    clearLog();
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('progressText').textContent = '0%';
+    document.getElementById('statusLabel').textContent = '✅ Siap';
+    document.getElementById('btnRun').disabled = false;
+    document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
+    isRunning = false;
+}
+
+// ============================================================
+//  EVENT LISTENERS
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    initUI();
+    
+    document.getElementById('btnRun').addEventListener('click', runTest);
+    document.getElementById('btnClear').addEventListener('click', clearAll);
+    
+    // Enter key support for MAC inputs
+    for (let i = 0; i < MAX_MAC; i++) {
+        document.getElementById(`mac_${i}`).addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const next = document.getElementById(`mac_${i+1}`);
+                if (next) next.focus();
+            }
+        });
+    }
+    
+    // Portal URL Enter key
+    document.getElementById('portalUrl').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('mac_0').focus();
+        }
+    });
+    
+    addLog('📡 MAC Multi-Tester siap digunakan!', 'info');
+    addLog('💡 Isi portal URL dan MAC address, lalu klik RUN', 'info');
+    addLog('🔧 Menggunakan proxy: /api/proxy', 'info');
+});
+
+// ============================================================
+//  EXPOSE FUNCTIONS FOR HTML
+// ============================================================
+window.switchTab = switchTab;
+window.runTest = runTest;
+window.clearAll = clearAll;
+</script>
+</body>
+</html>
