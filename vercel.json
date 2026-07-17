@@ -1,15 +1,11 @@
 {
-    "builds": [
-        {
-            "src": "api/proxy.js",
-            "use": "@vercel/node"
+    "functions": {
+        "api/proxy.js": {
+            "runtime": "nodejs18.x"
         }
-    ],
-    "routes": [
-        {
-            "src": "/api/(.*)",
-            "dest": "/api/proxy.js"
-        }
+    },
+    "rewrites": [
+        { "source": "/api/(.*)", "destination": "/api/proxy.js" }
     ],
     "headers": [
         {
