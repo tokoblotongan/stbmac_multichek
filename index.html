@@ -364,6 +364,24 @@
             padding: 2px 6px;
             border-radius: 4px;
         }
+        .proxy-selector {
+            display: flex;
+            gap: 12px;
+            margin: 8px 0;
+            flex-wrap: wrap;
+        }
+        .proxy-selector label {
+            display: flex;
+            align-items: center;
+            margin: 0;
+            font-weight: 400;
+            font-size: 13px;
+            color: #cbd5e1;
+        }
+        .proxy-selector input[type="radio"] {
+            width: auto;
+            margin-right: 6px;
+        }
         @media (max-width: 768px) {
             .card { padding: 16px; }
             .mac-row { flex-wrap: wrap; }
@@ -381,7 +399,27 @@
 
         <!-- Proxy Info -->
         <div class="proxy-info">
-            🔄 Using proxy: <code>/api/proxy</code> (bypass CORS)
+            🌐 Using external CORS proxy: <code id="selectedProxy">cors-anywhere</code>
+        </div>
+
+        <!-- Proxy Selector -->
+        <div class="proxy-selector">
+            <label>
+                <input type="radio" name="proxy" value="cors-anywhere" checked>
+                CORS Anywhere
+            </label>
+            <label>
+                <input type="radio" name="proxy" value="allorigins">
+                All Origins
+            </label>
+            <label>
+                <input type="radio" name="proxy" value="thingproxy">
+                ThingProxy
+            </label>
+            <label>
+                <input type="radio" name="proxy" value="none">
+                No Proxy (Direct)
+            </label>
         </div>
 
         <!-- Portal URL -->
@@ -465,9 +503,14 @@
 
 <script>
 // ============================================================
-//  CONFIGURATION
+//  CONFIGURATION - External CORS Proxies
 // ============================================================
-const PROXY_API = '/api/proxy';  // Vercel serverless function
+const PROXIES = {
+    'cors-anywhere': 'https://cors-anywhere.herokuapp.com/',
+    'allorigins': 'https://api.allorigins.win/raw?url=',
+    'thingproxy': 'https://api.thingproxy.com/fetch/',
+    'none': ''
+};
 
 // ============================================================
 //  GLOBAL VARIABLES
@@ -513,6 +556,21 @@ function initUI() {
     const valueDisplay = document.getElementById('parallelValue');
     slider.addEventListener('input', function() {
         valueDisplay.textContent = this.value;
+    });
+    
+    // Proxy selector
+    document.querySelectorAll('input[name="proxy"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const proxyName = this.value;
+            const proxyNames = {
+                'cors-anywhere': 'cors-anywhere',
+                'allorigins': 'allorigins',
+                'thingproxy': 'thingproxy',
+                'none': 'No Proxy (Direct)'
+            };
+            document.getElementById('selectedProxy').textContent = proxyNames[proxyName] || proxyName;
+            addLog(`🔄 Proxy changed to: ${proxyNames[proxyName]}`, 'info');
+        });
     });
 }
 
@@ -589,27 +647,85 @@ function getMACs() {
 }
 
 // ============================================================
-//  PROXY REQUEST FUNCTION
+//  GET SELECTED PROXY
+// ============================================================
+function getSelectedProxy() {
+    const selected = document.querySelector('input[name="proxy"]:checked');
+    return selected ? selected.value : 'cors-anywhere';
+}
+
+// ============================================================
+//  PROXY REQUEST FUNCTION (with external proxy)
 // ============================================================
 async function proxyRequest(url, options = {}) {
-    const proxyUrl = `${PROXY_API}?url=${encodeURIComponent(url)}`;
+    const proxyType = getSelectedProxy();
+    const proxyUrl = PROXIES[proxyType] || '';
     
-    const response = await fetch(proxyUrl, {
+    // If no proxy or direct mode
+    if (!proxyUrl || proxyType === 'none') {
+        const response = await fetch(url, {
+            method: options.method || 'GET',
+            headers: options.headers || {},
+            body: options.body || null,
+            credentials: 'omit'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch {
+            throw new Error('Invalid JSON response from server');
+        }
+    }
+    
+    // Use external proxy
+    let finalUrl;
+    if (proxyType === 'allorigins') {
+        // All Origins requires URL as parameter
+        finalUrl = `${proxyUrl}${encodeURIComponent(url)}`;
+    } else {
+        // Other proxies just prepend the URL
+        finalUrl = `${proxyUrl}${url}`;
+    }
+    
+    const response = await fetch(finalUrl, {
         method: options.method || 'GET',
-        headers: options.headers || {},
+        headers: {
+            ...options.headers,
+            'Accept': 'application/json, text/plain, */*'
+        },
         body: options.body || null,
         credentials: 'omit'
     });
     
     if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`Proxy HTTP ${response.status}: ${response.statusText}`);
     }
     
     const text = await response.text();
+    
+    // CORS Anywhere kadang return HTML error
+    if (text.includes('<html>') || text.includes('<!DOCTYPE')) {
+        throw new Error('Proxy returned HTML (likely blocked or invalid URL)');
+    }
+    
     try {
         return JSON.parse(text);
     } catch {
-        return text;
+        // Try to extract JSON from text
+        const jsonMatch = text.match(/\{.*\}/s);
+        if (jsonMatch) {
+            try {
+                return JSON.parse(jsonMatch[0]);
+            } catch {
+                throw new Error('Invalid JSON response');
+            }
+        }
+        throw new Error('Invalid response from server');
     }
 }
 
@@ -632,7 +748,7 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         ...session.headers
     };
     
-    // Gunakan proxy untuk menghindari CORS
+    // Gunakan proxy eksternal
     const result = await proxyRequest(url.toString(), { headers });
     
     if (typeof result === 'string') {
@@ -726,27 +842,39 @@ async function testStream(portal, token) {
         
         if (!streamUrl) return { ok: false, url: '' };
         
-        // Test stream melalui proxy
+        // Test stream - try to fetch with timeout
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
             const testResponse = await fetch(streamUrl, {
                 method: 'HEAD',
                 headers: { 
                     'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3' 
                 },
+                signal: controller.signal,
                 credentials: 'omit'
             });
+            
+            clearTimeout(timeoutId);
             return { ok: testResponse.ok || testResponse.status === 206, url: streamUrl };
         } catch {
-            // Jika HEAD gagal, coba GET range
+            // Try GET with range
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                
                 const testResponse = await fetch(streamUrl, {
                     method: 'GET',
                     headers: { 
                         'Range': 'bytes=0-1024',
                         'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3'
                     },
+                    signal: controller.signal,
                     credentials: 'omit'
                 });
+                
+                clearTimeout(timeoutId);
                 return { ok: testResponse.ok || testResponse.status === 206, url: streamUrl };
             } catch {
                 return { ok: false, url: streamUrl };
@@ -1007,6 +1135,8 @@ async function runTest() {
     };
     
     const parallel = parseInt(document.getElementById('parallelSlider').value);
+    const proxyType = getSelectedProxy();
+    const proxyName = document.getElementById('selectedProxy').textContent;
     
     // Start test
     isRunning = true;
@@ -1016,6 +1146,7 @@ async function runTest() {
     
     addLog(`🚀 Starting test on ${portal}`, 'info');
     addLog(`📊 ${macList.length} MAC | Parallel: ${parallel}`, 'info');
+    addLog(`🌐 Proxy: ${proxyName}`, 'info');
     addLog(`⚙️ Profile: ${options.profile} | Channels: ${options.channels} | Stream: ${options.stream}`, 'info');
     
     const results = [];
@@ -1147,7 +1278,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     addLog('📡 MAC Multi-Tester siap digunakan!', 'info');
     addLog('💡 Isi portal URL dan MAC address, lalu klik RUN', 'info');
-    addLog('🔧 Menggunakan proxy: /api/proxy', 'info');
+    addLog('🌐 Pilih proxy yang bekerja untuk server Anda', 'info');
 });
 
 // ============================================================
