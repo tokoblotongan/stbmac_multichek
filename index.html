@@ -386,6 +386,7 @@ const PROXY = '/api/proxy?url=';
 const MAX_MAC = 10;
 const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
 let isRunning = false;
+let cookieStore = {};
 
 // ============================================================
 //  UI INITIALIZATION
@@ -485,19 +486,65 @@ function getMACs() {
     return macs;
 }
 
+// ============================================================
+//  PROXY REQUEST - Dengan Cookie Persistence
+// ============================================================
 async function proxyRequest(url, options = {}) {
     const proxyUrl = `${PROXY}${encodeURIComponent(url)}`;
     
+    // Gunakan MAC sebagai session key
+    const sessionKey = options.mac || 'default';
+    
+    // Ambil cookie yang tersimpan
+    let savedCookies = cookieStore[sessionKey] || '';
+    
+    // Siapkan headers
+    const headers = {
+        ...options.headers,
+        'Cookie': savedCookies
+    };
+    
+    // Tambahkan cookie dari options jika ada
+    if (options.headers?.Cookie) {
+        headers['Cookie'] = headers['Cookie'] 
+            ? `${headers['Cookie']}; ${options.headers.Cookie}`
+            : options.headers.Cookie;
+    }
+    
     const response = await fetch(proxyUrl, {
         method: options.method || 'GET',
-        headers: options.headers || {},
+        headers: headers,
         body: options.body || null,
-        credentials: 'omit'
+        credentials: 'include'
     });
     
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Proxy error (${response.status}): ${errorText}`);
+        throw new Error(`Proxy error (${response.status}): ${errorText.substring(0, 100)}`);
+    }
+    
+    // Simpan cookie dari response
+    const setCookie = response.headers.get('set-cookie');
+    if (setCookie) {
+        // Parse cookie
+        const cookies = setCookie.split(',').map(c => c.trim());
+        let newCookies = savedCookies;
+        
+        cookies.forEach(cookie => {
+            const parts = cookie.split(';');
+            const nameValue = parts[0];
+            if (nameValue.includes('=')) {
+                const name = nameValue.split('=')[0];
+                // Hapus cookie lama dengan nama yang sama
+                newCookies = newCookies
+                    .split('; ')
+                    .filter(c => !c.startsWith(name + '='))
+                    .join('; ');
+                newCookies = newCookies ? `${newCookies}; ${nameValue}` : nameValue;
+            }
+        });
+        
+        cookieStore[sessionKey] = newCookies;
     }
     
     const text = await response.text();
@@ -508,6 +555,9 @@ async function proxyRequest(url, options = {}) {
     }
 }
 
+// ============================================================
+//  STALKER API FUNCTIONS
+// ============================================================
 async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const url = new URL(`${portal}/portal.php`);
     url.search = new URLSearchParams({
@@ -524,7 +574,8 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         ...session.headers
     };
     
-    return await proxyRequest(url.toString(), { headers });
+    const mac = session.mac || '';
+    return await proxyRequest(url.toString(), { headers, mac });
 }
 
 async function doHandshake(portal, mac) {
@@ -532,9 +583,30 @@ async function doHandshake(portal, mac) {
         const result = await stalkerRequest(portal, 
             { type: 'stb', action: 'handshake' },
             {},
-            { headers: { 'Cookie': `mac=${mac}; stb_lang=en; timezone=Europe/Amsterdam` } }
+            { 
+                headers: { 
+                    'Cookie': `mac=${mac}; stb_lang=en; timezone=Europe/Amsterdam` 
+                },
+                mac: mac 
+            }
         );
-        return result.js?.token || null;
+        
+        // Cek response
+        if (result.js && result.js.token) {
+            return result.js.token;
+        }
+        
+        // Coba response format lain
+        if (result.token) {
+            return result.token;
+        }
+        
+        // Cek auth status
+        if (result.js && result.js.auth === 1) {
+            return 'authenticated';
+        }
+        
+        return null;
     } catch (error) {
         addLog(`Handshake failed for ${mac}: ${error.message}`, 'error');
         return null;
@@ -629,6 +701,9 @@ async function testStream(portal, token) {
     }
 }
 
+// ============================================================
+//  TEST ONE MAC
+// ============================================================
 async function testOneMAC(portal, mac, index, options) {
     const result = {
         no: index + 1,
@@ -655,7 +730,7 @@ async function testOneMAC(portal, mac, index, options) {
         result.online = !!token;
         
         if (!token) {
-            result.error = 'Handshake failed';
+            result.error = 'Handshake failed - token not received';
             return result;
         }
         
@@ -684,6 +759,9 @@ async function testOneMAC(portal, mac, index, options) {
     return result;
 }
 
+// ============================================================
+//  RENDER TABLE
+// ============================================================
 function renderTable(results, portal, options) {
     const online = results.filter(r => r.online);
     const offline = results.filter(r => !r.online);
@@ -806,12 +884,17 @@ function exportCSV(results, portal) {
     addLog(`📊 CSV exported: mac_test_${timestamp}.csv`, 'success');
 }
 
+// ============================================================
+//  MAIN RUN FUNCTION
+// ============================================================
 async function runTest() {
     if (isRunning) {
         addLog('⚠️ Test sedang berjalan, tunggu sampai selesai', 'error');
         return;
     }
     
+    // Reset cookie store untuk session baru
+    cookieStore = {};
     document.getElementById('resultContainer').innerHTML = '';
     clearLog();
     
@@ -922,6 +1005,7 @@ function clearAll() {
         document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
     }
     
+    cookieStore = {};
     document.getElementById('portalUrl').value = '';
     for (let i = 0; i < MAX_MAC; i++) {
         document.getElementById(`mac_${i}`).value = '';
