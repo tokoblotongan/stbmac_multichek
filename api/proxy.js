@@ -1,40 +1,36 @@
 // ============================================================
 //  API PROXY - Vercel Serverless Function
-//  Menghandle CORS dan forward request ke Stalker server
+//  Dengan Cookie Persistence
 // ============================================================
 
+// Store cookies per session (gunakan Map sederhana)
+// NOTE: Ini hanya untuk demo, untuk production gunakan Redis atau database
+const cookieStore = new Map();
+
 export default async function handler(req, res) {
-    // ==========================================================
-    //  1. CORS HEADERS
-    // ==========================================================
+    // CORS HEADERS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, X-Requested-With, User-Agent, Referer');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, X-Requested-With, User-Agent, Referer, Set-Cookie');
     
-    // ==========================================================
-    //  2. HANDLE PREFLIGHT (OPTIONS)
-    // ==========================================================
+    // HANDLE PREFLIGHT
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
     
-    // ==========================================================
-    //  3. VALIDASI URL
-    // ==========================================================
     try {
         const { url } = req.query;
         
         if (!url) {
             return res.status(400).json({
                 success: false,
-                error: 'URL parameter is required',
-                hint: 'Use: /api/proxy?url=https://example.com'
+                error: 'URL parameter is required'
             });
         }
         
         const targetUrl = decodeURIComponent(url);
         
-        // Validasi format URL
+        // Validasi URL
         try {
             new URL(targetUrl);
         } catch {
@@ -45,29 +41,42 @@ export default async function handler(req, res) {
         }
         
         // ==========================================================
-        //  4. PREPARE HEADERS (Hanya kirim yang ada)
+        //  1. GET COOKIE DARI SESSION
+        // ==========================================================
+        // Gunakan MAC address sebagai session key (dikirim via cookie)
+        const cookieHeader = req.headers['cookie'] || '';
+        const macMatch = cookieHeader.match(/mac=([^;]+)/);
+        const sessionKey = macMatch ? macMatch[1] : 'default';
+        
+        // Ambil cookie yang tersimpan
+        let savedCookies = cookieStore.get(sessionKey) || '';
+        
+        // ==========================================================
+        //  2. PREPARE HEADERS
         // ==========================================================
         const headers = {
             'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
             'X-Requested-With': 'XMLHttpRequest',
             'Accept': 'application/json, text/plain, */*',
             'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive'
+            'Connection': 'keep-alive',
+            'Referer': targetUrl.includes('portal.php') ? targetUrl.replace(/portal\.php.*$/, 'portal.php') : targetUrl
         };
         
-        // Hanya kirim header jika ada
+        // Tambahkan cookie yang tersimpan
+        if (savedCookies) {
+            headers['Cookie'] = savedCookies;
+        }
+        
+        // Tambahkan cookie dari request jika ada
         if (req.headers['cookie']) {
-            headers['Cookie'] = req.headers['cookie'];
-        }
-        if (req.headers['authorization']) {
-            headers['Authorization'] = req.headers['authorization'];
-        }
-        if (req.headers['referer']) {
-            headers['Referer'] = req.headers['referer'];
+            headers['Cookie'] = headers['Cookie'] 
+                ? `${headers['Cookie']}; ${req.headers['cookie']}`
+                : req.headers['cookie'];
         }
         
         // ==========================================================
-        //  5. FETCH DENGAN TIMEOUT
+        //  3. FETCH DENGAN TIMEOUT
         // ==========================================================
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -82,7 +91,33 @@ export default async function handler(req, res) {
         clearTimeout(timeoutId);
         
         // ==========================================================
-        //  6. RESPONSE
+        //  4. SIMPAN COOKIE DARI RESPONSE
+        // ==========================================================
+        const setCookie = response.headers.get('set-cookie');
+        if (setCookie) {
+            // Parse dan simpan cookie
+            const cookies = setCookie.split(',').map(c => c.trim());
+            let newCookies = savedCookies;
+            
+            cookies.forEach(cookie => {
+                const parts = cookie.split(';');
+                const nameValue = parts[0];
+                if (nameValue.includes('=')) {
+                    // Hapus cookie lama dengan nama yang sama
+                    const name = nameValue.split('=')[0];
+                    newCookies = newCookies
+                        .split('; ')
+                        .filter(c => !c.startsWith(name + '='))
+                        .join('; ');
+                    newCookies = newCookies ? `${newCookies}; ${nameValue}` : nameValue;
+                }
+            });
+            
+            cookieStore.set(sessionKey, newCookies);
+        }
+        
+        // ==========================================================
+        //  5. RESPONSE
         // ==========================================================
         const data = await response.text();
         
@@ -92,19 +127,20 @@ export default async function handler(req, res) {
             res.setHeader('Content-Type', contentType);
         }
         
+        // Forward set-cookie ke client
+        if (setCookie) {
+            res.setHeader('Set-Cookie', setCookie);
+        }
+        
         res.status(response.status).send(data);
         
     } catch (error) {
-        // ==========================================================
-        //  7. ERROR HANDLING
-        // ==========================================================
         console.error('Proxy Error:', error.message);
         
         if (error.name === 'AbortError') {
             return res.status(504).json({
                 success: false,
-                error: 'Request timeout (15s)',
-                hint: 'Server terlalu lambat merespon'
+                error: 'Request timeout (15s)'
             });
         }
         
