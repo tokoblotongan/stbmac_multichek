@@ -486,13 +486,23 @@ function getMACs() {
 }
 
 // ============================================================
-//  PROXY REQUEST - Kirim MAC sebagai query parameter
+//  PROXY REQUEST - Kirim MAC dan TOKEN sebagai query parameter
 // ============================================================
 async function proxyRequest(url, options = {}) {
-    const mac = options.mac || "";
+    const params = new URLSearchParams();
+    params.set("url", url);
     
-    // Bangun URL dengan mac sebagai query parameter
-    const api = `${PROXY}${encodeURIComponent(url)}&mac=${encodeURIComponent(mac)}`;
+    if (options.mac) {
+        params.set("mac", options.mac);
+    }
+    
+    // Kirim token jika ada di headers.Authorization
+    if (options.headers && options.headers.Authorization) {
+        const token = options.headers.Authorization.replace("Bearer ", "");
+        params.set("token", token);
+    }
+    
+    const api = `/api/proxy?${params.toString()}`;
     
     const response = await fetch(api, {
         method: 'GET',
@@ -526,13 +536,14 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         JsHttpRequest: '1-xml'
     });
     
+    // GABUNGKAN session.headers
     const headers = {
         'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
         'X-Requested-With': 'XMLHttpRequest',
-        'Referer': `${portal}/portal.php`
+        'Referer': `${portal}/portal.php`,
+        ...(session.headers || {})
     };
     
-    // Kirim mac sebagai parameter, bukan di cookie
     const mac = session.mac || '';
     
     return await proxyRequest(url.toString(), { 
@@ -560,7 +571,6 @@ async function doHandshake(portal, mac) {
             return 'authenticated';
         }
         
-        // Log response untuk debugging
         console.log('Handshake response:', result);
         return null;
     } catch (error) {
@@ -574,14 +584,18 @@ async function getProfile(portal, token) {
         const result = await stalkerRequest(portal,
             { type: 'account_info', action: 'get_main_info' },
             {},
-            { headers: { 'Authorization': `Bearer ${token}` } }
+            { 
+                headers: { 'Authorization': `Bearer ${token}` },
+                mac: 'default'
+            }
         );
         const js = result.js || {};
         const name = `${js.fname || ''} ${js.lname || ''}`.trim() || js.login || '';
         const expire = js.end_date || js.expire_date || '';
         const status = js.status || js.account_status || '';
         return { name, expire, status };
-    } catch {
+    } catch (error) {
+        console.error('GetProfile error:', error);
         return { name: '', expire: '', status: '' };
     }
 }
@@ -591,16 +605,23 @@ async function countChannels(portal, token) {
         const result = await stalkerRequest(portal,
             { type: 'itv', action: 'get_all_channels' },
             {},
-            { headers: { 'Authorization': `Bearer ${token}` } }
+            { 
+                headers: { 'Authorization': `Bearer ${token}` },
+                mac: 'default'
+            }
         );
         const data = result.js?.data || [];
         return Array.isArray(data) ? data.length : 0;
-    } catch {
+    } catch (error) {
+        console.error('CountChannels error:', error);
         try {
             const result = await stalkerRequest(portal,
                 { type: 'itv', action: 'get_ordered_list' },
                 { genre: '*', p: '1' },
-                { headers: { 'Authorization': `Bearer ${token}` } }
+                { 
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    mac: 'default'
+                }
             );
             const js = result.js || {};
             return js.total_items || js.data?.length || 0;
@@ -615,7 +636,10 @@ async function testStream(portal, token) {
         const listResult = await stalkerRequest(portal,
             { type: 'itv', action: 'get_ordered_list' },
             { genre: '*', p: '1' },
-            { headers: { 'Authorization': `Bearer ${token}` } }
+            { 
+                headers: { 'Authorization': `Bearer ${token}` },
+                mac: 'default'
+            }
         );
         
         const data = listResult.js?.data || [];
@@ -627,7 +651,10 @@ async function testStream(portal, token) {
         const linkResult = await stalkerRequest(portal,
             { type: 'itv', action: 'create_link' },
             { cmd: encodeURIComponent(cmd) },
-            { headers: { 'Authorization': `Bearer ${token}` } }
+            { 
+                headers: { 'Authorization': `Bearer ${token}` },
+                mac: 'default'
+            }
         );
         
         const raw = (linkResult.js?.cmd || linkResult.js?.url || '').toString();
