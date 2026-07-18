@@ -1,12 +1,15 @@
 {
-  "name": "mac-tester",
-  "version": "1.0.0",
-  "type": "module",
-  "private": true,
-
-  "scripts": {
-    "dev": "vercel dev",
-    "build": "echo No build needed",
-    "deploy": "vercel --prod"
-  }
+    "name": "stbmac-multichek",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "MAC Multi-Tester for Stalker Middleware",
+    "scripts": {
+        "dev": "vercel dev",
+        "build": "echo 'No build needed'",
+        "deploy": "vercel --prod"
+    },
+    "engines": {
+        "node": "18.x"
+    }
 }
