@@ -45,22 +45,7 @@ export default async function handler(req, res) {
         }
         
         // ==========================================================
-        //  4. (OPTIONAL) WHITELIST DOMAIN - UNCOMMENT UNTUK PAKAI
-        // ==========================================================
-        // const allowedDomains = [
-        //     'your-portal-domain.com',
-        //     'iptv-server.com'
-        // ];
-        // const urlObj = new URL(targetUrl);
-        // if (!allowedDomains.includes(urlObj.hostname)) {
-        //     return res.status(403).json({
-        //         success: false,
-        //         error: 'Domain not allowed'
-        //     });
-        // }
-        
-        // ==========================================================
-        //  5. PREPARE HEADERS
+        //  4. PREPARE HEADERS (Hanya kirim yang ada)
         // ==========================================================
         const headers = {
             'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
@@ -70,7 +55,7 @@ export default async function handler(req, res) {
             'Connection': 'keep-alive'
         };
         
-        // Forward important headers dari client
+        // Hanya kirim header jika ada
         if (req.headers['cookie']) {
             headers['Cookie'] = req.headers['cookie'];
         }
@@ -82,7 +67,7 @@ export default async function handler(req, res) {
         }
         
         // ==========================================================
-        //  6. FETCH DENGAN TIMEOUT
+        //  5. FETCH DENGAN TIMEOUT
         // ==========================================================
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -97,7 +82,7 @@ export default async function handler(req, res) {
         clearTimeout(timeoutId);
         
         // ==========================================================
-        //  7. RESPONSE
+        //  6. RESPONSE
         // ==========================================================
         const data = await response.text();
         
@@ -111,7 +96,7 @@ export default async function handler(req, res) {
         
     } catch (error) {
         // ==========================================================
-        //  8. ERROR HANDLING
+        //  7. ERROR HANDLING
         // ==========================================================
         console.error('Proxy Error:', error.message);
         
