@@ -386,7 +386,6 @@ const PROXY = '/api/proxy?url=';
 const MAX_MAC = 10;
 const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
 let isRunning = false;
-let cookieStore = {};
 
 // ============================================================
 //  UI INITIALIZATION
@@ -487,64 +486,24 @@ function getMACs() {
 }
 
 // ============================================================
-//  PROXY REQUEST - Dengan Cookie Persistence
+//  PROXY REQUEST - Kirim MAC sebagai query parameter
 // ============================================================
 async function proxyRequest(url, options = {}) {
-    const proxyUrl = `${PROXY}${encodeURIComponent(url)}`;
+    const mac = options.mac || "";
     
-    // Gunakan MAC sebagai session key
-    const sessionKey = options.mac || 'default';
+    // Bangun URL dengan mac sebagai query parameter
+    const api = `${PROXY}${encodeURIComponent(url)}&mac=${encodeURIComponent(mac)}`;
     
-    // Ambil cookie yang tersimpan
-    let savedCookies = cookieStore[sessionKey] || '';
-    
-    // Siapkan headers
-    const headers = {
-        ...options.headers,
-        'Cookie': savedCookies
-    };
-    
-    // Tambahkan cookie dari options jika ada
-    if (options.headers?.Cookie) {
-        headers['Cookie'] = headers['Cookie'] 
-            ? `${headers['Cookie']}; ${options.headers.Cookie}`
-            : options.headers.Cookie;
-    }
-    
-    const response = await fetch(proxyUrl, {
-        method: options.method || 'GET',
-        headers: headers,
-        body: options.body || null,
-        credentials: 'include'
+    const response = await fetch(api, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json, text/plain, */*'
+        }
     });
     
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Proxy error (${response.status}): ${errorText.substring(0, 100)}`);
-    }
-    
-    // Simpan cookie dari response
-    const setCookie = response.headers.get('set-cookie');
-    if (setCookie) {
-        // Parse cookie
-        const cookies = setCookie.split(',').map(c => c.trim());
-        let newCookies = savedCookies;
-        
-        cookies.forEach(cookie => {
-            const parts = cookie.split(';');
-            const nameValue = parts[0];
-            if (nameValue.includes('=')) {
-                const name = nameValue.split('=')[0];
-                // Hapus cookie lama dengan nama yang sama
-                newCookies = newCookies
-                    .split('; ')
-                    .filter(c => !c.startsWith(name + '='))
-                    .join('; ');
-                newCookies = newCookies ? `${newCookies}; ${nameValue}` : nameValue;
-            }
-        });
-        
-        cookieStore[sessionKey] = newCookies;
     }
     
     const text = await response.text();
@@ -570,12 +529,16 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const headers = {
         'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
         'X-Requested-With': 'XMLHttpRequest',
-        'Referer': `${portal}/portal.php`,
-        ...session.headers
+        'Referer': `${portal}/portal.php`
     };
     
+    // Kirim mac sebagai parameter, bukan di cookie
     const mac = session.mac || '';
-    return await proxyRequest(url.toString(), { headers, mac });
+    
+    return await proxyRequest(url.toString(), { 
+        headers, 
+        mac 
+    });
 }
 
 async function doHandshake(portal, mac) {
@@ -583,29 +546,22 @@ async function doHandshake(portal, mac) {
         const result = await stalkerRequest(portal, 
             { type: 'stb', action: 'handshake' },
             {},
-            { 
-                headers: { 
-                    'Cookie': `mac=${mac}; stb_lang=en; timezone=Europe/Amsterdam` 
-                },
-                mac: mac 
-            }
+            { mac: mac }
         );
         
-        // Cek response
+        // Cek response - support multiple formats
         if (result.js && result.js.token) {
             return result.js.token;
         }
-        
-        // Coba response format lain
         if (result.token) {
             return result.token;
         }
-        
-        // Cek auth status
         if (result.js && result.js.auth === 1) {
             return 'authenticated';
         }
         
+        // Log response untuk debugging
+        console.log('Handshake response:', result);
         return null;
     } catch (error) {
         addLog(`Handshake failed for ${mac}: ${error.message}`, 'error');
@@ -893,8 +849,6 @@ async function runTest() {
         return;
     }
     
-    // Reset cookie store untuk session baru
-    cookieStore = {};
     document.getElementById('resultContainer').innerHTML = '';
     clearLog();
     
@@ -1005,7 +959,6 @@ function clearAll() {
         document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
     }
     
-    cookieStore = {};
     document.getElementById('portalUrl').value = '';
     for (let i = 0; i < MAX_MAC; i++) {
         document.getElementById(`mac_${i}`).value = '';
