@@ -1,15 +1,12 @@
 {
-    "name": "mac-tester",
-    "version": "1.0.0",
-    "type": "module",
-    "description": "MAC Multi-Tester for Stalker Middleware",
-    "main": "index.html",
-    "scripts": {
-        "dev": "vercel dev",
-        "build": "echo 'No build needed'",
-        "deploy": "vercel deploy --prod"
-    },
-    "dependencies": {
-        "@vercel/node": "^2.0.0"
-    }
+  "name": "mac-tester",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo No build needed",
+    "deploy": "vercel --prod"
+  }
 }
