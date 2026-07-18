@@ -311,12 +311,10 @@
         <h1>📡 MAC Multi-Tester</h1>
         <div class="subtitle">1 Portal URL → Test banyak MAC sekaligus → Temukan yang terbaik</div>
 
-        <!-- Proxy Info -->
         <div class="proxy-info">
             🔄 Using local proxy: <code>/api/proxy</code>
         </div>
 
-        <!-- Portal URL -->
         <label>🌐 Portal URL</label>
         <input type="text" id="portalUrl" placeholder="http://domain.com:8080" style="max-width: 600px;">
         <div style="font-size:12px; color:#64748b; margin-top:4px;">
@@ -325,7 +323,6 @@
 
         <hr class="separator">
 
-        <!-- MAC Address Inputs -->
         <div style="font-family:monospace; margin:12px 0 4px 0;">
             <b style="font-size:13px;">🔲 Daftar MAC Address (maks 10):</b>
         </div>
@@ -333,7 +330,6 @@
 
         <hr class="separator">
 
-        <!-- Options -->
         <b style="font-family:monospace; font-size:13px;">⚙️ Opsi Test:</b>
         <div class="option-group">
             <label><input type="checkbox" id="chkProfile" checked> Info profil (nama, expired)</label>
@@ -351,13 +347,11 @@
 
         <hr class="separator">
 
-        <!-- Buttons -->
         <div class="btn-group">
             <button id="btnRun">🚀 RUN TEST SEMUA MAC</button>
             <button class="danger" id="btnClear">🗑️ Clear</button>
         </div>
 
-        <!-- Progress -->
         <div class="progress-container">
             <div class="progress-bar">
                 <div class="progress-fill" id="progressFill" style="width:0%"></div>
@@ -366,7 +360,6 @@
             <div class="status-text" id="statusLabel">✅ Siap — isi portal dan MAC lalu klik RUN</div>
         </div>
 
-        <!-- Result Tabs -->
         <div class="tab-buttons">
             <button class="tab-btn active" onclick="switchTab('result')">📊 Hasil</button>
             <button class="tab-btn" onclick="switchTab('log')">📋 Log</button>
@@ -383,7 +376,7 @@
 
 <script>
 // ============================================================
-//  KONFIGURASI - Gunakan Proxy Vercel Sendiri
+//  KONFIGURASI - Proxy Vercel Sendiri
 // ============================================================
 const PROXY = '/api/proxy?url=';
 
@@ -426,7 +419,6 @@ function initUI() {
         container.appendChild(row);
     }
     
-    // Parallel slider
     const slider = document.getElementById('parallelSlider');
     const valueDisplay = document.getElementById('parallelValue');
     slider.addEventListener('input', function() {
@@ -434,9 +426,6 @@ function initUI() {
     });
 }
 
-// ============================================================
-//  TAB SWITCHING
-// ============================================================
 function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
@@ -450,9 +439,6 @@ function switchTab(tabName) {
     document.getElementById(`tab-${tabName}`).classList.add('active');
 }
 
-// ============================================================
-//  LOGGING
-// ============================================================
 function addLog(message, type = 'info') {
     const logContainer = document.getElementById('logContainer');
     const timestamp = new Date().toLocaleTimeString();
@@ -467,9 +453,6 @@ function clearLog() {
     document.getElementById('logContainer').innerHTML = '📝 Log akan muncul di sini...\n';
 }
 
-// ============================================================
-//  VALIDATION
-// ============================================================
 function validateURL(url) {
     try {
         const urlObj = new URL(url);
@@ -502,9 +485,6 @@ function getMACs() {
     return macs;
 }
 
-// ============================================================
-//  PROXY REQUEST - Via Vercel Serverless
-// ============================================================
 async function proxyRequest(url, options = {}) {
     const proxyUrl = `${PROXY}${encodeURIComponent(url)}`;
     
@@ -528,9 +508,6 @@ async function proxyRequest(url, options = {}) {
     }
 }
 
-// ============================================================
-//  STALKER API FUNCTIONS
-// ============================================================
 async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const url = new URL(`${portal}/portal.php`);
     url.search = new URLSearchParams({
@@ -652,9 +629,6 @@ async function testStream(portal, token) {
     }
 }
 
-// ============================================================
-//  TEST ONE MAC
-// ============================================================
 async function testOneMAC(portal, mac, index, options) {
     const result = {
         no: index + 1,
@@ -710,9 +684,6 @@ async function testOneMAC(portal, mac, index, options) {
     return result;
 }
 
-// ============================================================
-//  RENDER TABLE
-// ============================================================
 function renderTable(results, portal, options) {
     const online = results.filter(r => r.online);
     const offline = results.filter(r => !r.online);
@@ -811,9 +782,6 @@ function getExpireColor(expire) {
     return '#6b7280';
 }
 
-// ============================================================
-//  EXPORT CSV
-// ============================================================
 function exportCSV(results, portal) {
     const headers = ['No', 'MAC', 'Portal', 'Status', 'Nama', 'Expired', 'Acc Status', 'Channel', 'Stream', 'Ping (ms)', 'Error'];
     const rows = results.map(r => [
@@ -838,9 +806,6 @@ function exportCSV(results, portal) {
     addLog(`📊 CSV exported: mac_test_${timestamp}.csv`, 'success');
 }
 
-// ============================================================
-//  MAIN RUN FUNCTION
-// ============================================================
 async function runTest() {
     if (isRunning) {
         addLog('⚠️ Test sedang berjalan, tunggu sampai selesai', 'error');
@@ -949,9 +914,6 @@ async function runTest() {
     document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
 }
 
-// ============================================================
-//  CLEAR FUNCTION
-// ============================================================
 function clearAll() {
     if (isRunning) {
         if (!confirm('Test sedang berjalan. Yakin ingin membatalkan?')) return;
@@ -977,9 +939,6 @@ function clearAll() {
     isRunning = false;
 }
 
-// ============================================================
-//  EVENT LISTENERS
-// ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     initUI();
     
@@ -1004,9 +963,6 @@ document.addEventListener('DOMContentLoaded', function() {
     addLog('🔧 Menggunakan proxy: /api/proxy', 'info');
 });
 
-// ============================================================
-//  EXPOSE FUNCTIONS FOR HTML
-// ============================================================
 window.switchTab = switchTab;
 window.runTest = runTest;
 window.clearAll = clearAll;
