@@ -45,7 +45,7 @@
             margin-bottom: 6px;
             margin-top: 16px;
         }
-        input, textarea, select {
+        input {
             width: 100%;
             padding: 12px 16px;
             background: #0f172a;
@@ -56,7 +56,7 @@
             font-family: monospace;
             transition: all 0.2s;
         }
-        input:focus, textarea:focus {
+        input:focus {
             outline: none;
             border-color: #22c55e;
             box-shadow: 0 0 0 3px rgba(34,197,94,0.1);
@@ -103,15 +103,6 @@
             flex: 1;
             min-width: 150px;
         }
-        .result {
-            background: #0f172a;
-            border-radius: 12px;
-            padding: 16px;
-            margin-top: 20px;
-            border: 1px solid #334155;
-            max-height: 600px;
-            overflow: auto;
-        }
         .badge {
             display: inline-block;
             padding: 4px 10px;
@@ -122,54 +113,6 @@
         }
         .badge-online { background: #22c55e20; color: #22c55e; border: 1px solid #22c55e40; }
         .badge-offline { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; }
-        .badge-best { background: #f59e0b20; color: #f59e0b; border: 1px solid #f59e0b40; }
-        .stats {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-        .stat-card {
-            background: #0f172a;
-            padding: 12px 20px;
-            border-radius: 12px;
-            flex: 1;
-            text-align: center;
-            min-width: 100px;
-        }
-        .stat-number {
-            font-size: 28px;
-            font-weight: 700;
-        }
-        .stat-label {
-            font-size: 11px;
-            color: #64748b;
-            margin-top: 4px;
-        }
-        .stat-online .stat-number { color: #22c55e; }
-        .stat-offline .stat-number { color: #ef4444; }
-        .stat-best .stat-number { color: #f59e0b; }
-        .stat-total .stat-number { color: #60a5fa; }
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        .loading.show {
-            display: block;
-        }
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid #334155;
-            border-top-color: #22c55e;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 10px;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
         .mac-row {
             display: flex;
             align-items: center;
@@ -254,12 +197,8 @@
             padding: 6px 10px;
             border-bottom: 1px solid #334155;
         }
-        table tr.online-row {
-            background: #f0fdf4;
-        }
-        table tr.offline-row {
-            background: #fef2f2;
-        }
+        table tr.online-row { background: #f0fdf4; }
+        table tr.offline-row { background: #fef2f2; }
         .best-mac-banner {
             background: #064e3b;
             color: #d1fae5;
@@ -267,9 +206,6 @@
             border-radius: 8px;
             margin-bottom: 10px;
             font-family: monospace;
-        }
-        .best-mac-banner span {
-            font-weight: 700;
         }
         .progress-container {
             margin: 16px 0;
@@ -314,6 +250,7 @@
             color: #94a3b8;
             padding: 10px;
             font-size: 14px;
+            border-radius: 12px;
         }
         .tab-btn.active {
             background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -341,46 +278,23 @@
             overflow: auto;
             white-space: pre-wrap;
         }
-        .log-output .error {
-            color: #ef4444;
-        }
-        .log-output .success {
-            color: #22c55e;
-        }
-        .log-output .info {
-            color: #60a5fa;
-        }
+        .log-output .error { color: #ef4444; }
+        .log-output .success { color: #22c55e; }
+        .log-output .info { color: #60a5fa; }
         .proxy-info {
             background: #1e293b;
             padding: 8px 12px;
             border-radius: 8px;
-            font-size: 11px;
-            color: #94a3b8;
-            margin-top: 4px;
+            font-size: 12px;
+            color: #22c55e;
+            margin-bottom: 16px;
+            font-family: monospace;
         }
         .proxy-info code {
-            color: #a5f3fc;
             background: #0f172a;
-            padding: 2px 6px;
+            padding: 2px 8px;
             border-radius: 4px;
-        }
-        .proxy-selector {
-            display: flex;
-            gap: 12px;
-            margin: 8px 0;
-            flex-wrap: wrap;
-        }
-        .proxy-selector label {
-            display: flex;
-            align-items: center;
-            margin: 0;
-            font-weight: 400;
-            font-size: 13px;
-            color: #cbd5e1;
-        }
-        .proxy-selector input[type="radio"] {
-            width: auto;
-            margin-right: 6px;
+            color: #a5f3fc;
         }
         @media (max-width: 768px) {
             .card { padding: 16px; }
@@ -399,33 +313,12 @@
 
         <!-- Proxy Info -->
         <div class="proxy-info">
-            🌐 Using external CORS proxy: <code id="selectedProxy">cors-anywhere</code>
-        </div>
-
-        <!-- Proxy Selector -->
-        <div class="proxy-selector">
-            <label>
-                <input type="radio" name="proxy" value="cors-anywhere" checked>
-                CORS Anywhere
-            </label>
-            <label>
-                <input type="radio" name="proxy" value="allorigins">
-                All Origins
-            </label>
-            <label>
-                <input type="radio" name="proxy" value="thingproxy">
-                ThingProxy
-            </label>
-            <label>
-                <input type="radio" name="proxy" value="none">
-                No Proxy (Direct)
-            </label>
+            🔄 Using local proxy: <code>/api/proxy</code>
         </div>
 
         <!-- Portal URL -->
         <label>🌐 Portal URL</label>
-        <input type="text" id="portalUrl" placeholder="http://domain.com:8080" 
-               style="max-width: 600px;">
+        <input type="text" id="portalUrl" placeholder="http://domain.com:8080" style="max-width: 600px;">
         <div style="font-size:12px; color:#64748b; margin-top:4px;">
             Tanpa /c/ di akhir. Contoh: <code>http://domain.com:8080</code>
         </div>
@@ -434,9 +327,8 @@
 
         <!-- MAC Address Inputs -->
         <div style="font-family:monospace; margin:12px 0 4px 0;">
-            <b style="font-size:13px;">🔲 Daftar MAC Address (isi yang ingin ditest, maks 10):</b>
+            <b style="font-size:13px;">🔲 Daftar MAC Address (maks 10):</b>
         </div>
-
         <div id="macInputs"></div>
 
         <hr class="separator">
@@ -444,29 +336,17 @@
         <!-- Options -->
         <b style="font-family:monospace; font-size:13px;">⚙️ Opsi Test:</b>
         <div class="option-group">
-            <label>
-                <input type="checkbox" id="chkProfile" checked>
-                Info profil (nama, expired)
-            </label>
-            <label>
-                <input type="checkbox" id="chkChannels" checked>
-                Hitung jumlah channel
-            </label>
-            <label>
-                <input type="checkbox" id="chkStream" checked>
-                Test 1 stream (cek streaming aktif)
-            </label>
-            <label>
-                <input type="checkbox" id="chkExport" checked>
-                Export hasil ke CSV
-            </label>
+            <label><input type="checkbox" id="chkProfile" checked> Info profil (nama, expired)</label>
+            <label><input type="checkbox" id="chkChannels" checked> Hitung jumlah channel</label>
+            <label><input type="checkbox" id="chkStream" checked> Test 1 stream</label>
+            <label><input type="checkbox" id="chkExport" checked> Export ke CSV</label>
         </div>
 
         <div class="slider-container">
             <label style="margin:0; font-weight:400; color:#cbd5e1;">Paralel:</label>
             <input type="range" id="parallelSlider" min="1" max="10" value="5">
             <span class="slider-value" id="parallelValue">5</span>
-            <span style="font-size:11px; color:#6b7280;">Jumlah MAC yang ditest bersamaan</span>
+            <span style="font-size:11px; color:#6b7280;">MAC yang ditest bersamaan</span>
         </div>
 
         <hr class="separator">
@@ -503,14 +383,9 @@
 
 <script>
 // ============================================================
-//  CONFIGURATION - External CORS Proxies
+//  KONFIGURASI - Gunakan Proxy Vercel Sendiri
 // ============================================================
-const PROXIES = {
-    'cors-anywhere': 'https://cors-anywhere.herokuapp.com/',
-    'allorigins': 'https://api.allorigins.win/raw?url=',
-    'thingproxy': 'https://api.thingproxy.com/fetch/',
-    'none': ''
-};
+const PROXY = '/api/proxy?url=';
 
 // ============================================================
 //  GLOBAL VARIABLES
@@ -556,21 +431,6 @@ function initUI() {
     const valueDisplay = document.getElementById('parallelValue');
     slider.addEventListener('input', function() {
         valueDisplay.textContent = this.value;
-    });
-    
-    // Proxy selector
-    document.querySelectorAll('input[name="proxy"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const proxyName = this.value;
-            const proxyNames = {
-                'cors-anywhere': 'cors-anywhere',
-                'allorigins': 'allorigins',
-                'thingproxy': 'thingproxy',
-                'none': 'No Proxy (Direct)'
-            };
-            document.getElementById('selectedProxy').textContent = proxyNames[proxyName] || proxyName;
-            addLog(`🔄 Proxy changed to: ${proxyNames[proxyName]}`, 'info');
-        });
     });
 }
 
@@ -637,100 +497,39 @@ function getMACs() {
             continue;
         }
         
-        macs.push({
-            index: i,
-            mac: formatted,
-            raw: val
-        });
+        macs.push({ index: i, mac: formatted, raw: val });
     }
     return macs;
 }
 
 // ============================================================
-//  GET SELECTED PROXY
-// ============================================================
-function getSelectedProxy() {
-    const selected = document.querySelector('input[name="proxy"]:checked');
-    return selected ? selected.value : 'cors-anywhere';
-}
-
-// ============================================================
-//  PROXY REQUEST FUNCTION (with external proxy)
+//  PROXY REQUEST - Via Vercel Serverless
 // ============================================================
 async function proxyRequest(url, options = {}) {
-    const proxyType = getSelectedProxy();
-    const proxyUrl = PROXIES[proxyType] || '';
+    const proxyUrl = `${PROXY}${encodeURIComponent(url)}`;
     
-    // If no proxy or direct mode
-    if (!proxyUrl || proxyType === 'none') {
-        const response = await fetch(url, {
-            method: options.method || 'GET',
-            headers: options.headers || {},
-            body: options.body || null,
-            credentials: 'omit'
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const text = await response.text();
-        try {
-            return JSON.parse(text);
-        } catch {
-            throw new Error('Invalid JSON response from server');
-        }
-    }
-    
-    // Use external proxy
-    let finalUrl;
-    if (proxyType === 'allorigins') {
-        // All Origins requires URL as parameter
-        finalUrl = `${proxyUrl}${encodeURIComponent(url)}`;
-    } else {
-        // Other proxies just prepend the URL
-        finalUrl = `${proxyUrl}${url}`;
-    }
-    
-    const response = await fetch(finalUrl, {
+    const response = await fetch(proxyUrl, {
         method: options.method || 'GET',
-        headers: {
-            ...options.headers,
-            'Accept': 'application/json, text/plain, */*'
-        },
+        headers: options.headers || {},
         body: options.body || null,
         credentials: 'omit'
     });
     
     if (!response.ok) {
-        throw new Error(`Proxy HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Proxy error (${response.status}): ${errorText}`);
     }
     
     const text = await response.text();
-    
-    // CORS Anywhere kadang return HTML error
-    if (text.includes('<html>') || text.includes('<!DOCTYPE')) {
-        throw new Error('Proxy returned HTML (likely blocked or invalid URL)');
-    }
-    
     try {
         return JSON.parse(text);
     } catch {
-        // Try to extract JSON from text
-        const jsonMatch = text.match(/\{.*\}/s);
-        if (jsonMatch) {
-            try {
-                return JSON.parse(jsonMatch[0]);
-            } catch {
-                throw new Error('Invalid JSON response');
-            }
-        }
-        throw new Error('Invalid response from server');
+        throw new Error('Invalid JSON response from server');
     }
 }
 
 // ============================================================
-//  STALKER API FUNCTIONS (with proxy)
+//  STALKER API FUNCTIONS
 // ============================================================
 async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const url = new URL(`${portal}/portal.php`);
@@ -748,14 +547,7 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         ...session.headers
     };
     
-    // Gunakan proxy eksternal
-    const result = await proxyRequest(url.toString(), { headers });
-    
-    if (typeof result === 'string') {
-        throw new Error('Invalid response from server');
-    }
-    
-    return result;
+    return await proxyRequest(url.toString(), { headers });
 }
 
 async function doHandshake(portal, mac) {
@@ -797,8 +589,7 @@ async function countChannels(portal, token) {
             { headers: { 'Authorization': `Bearer ${token}` } }
         );
         const data = result.js?.data || [];
-        if (Array.isArray(data)) return data.length;
-        return 0;
+        return Array.isArray(data) ? data.length : 0;
     } catch {
         try {
             const result = await stalkerRequest(portal,
@@ -816,7 +607,6 @@ async function countChannels(portal, token) {
 
 async function testStream(portal, token) {
     try {
-        // Get first channel
         const listResult = await stalkerRequest(portal,
             { type: 'itv', action: 'get_ordered_list' },
             { genre: '*', p: '1' },
@@ -829,7 +619,6 @@ async function testStream(portal, token) {
         const cmd = data[0].cmd;
         if (!cmd) return { ok: false, url: '' };
         
-        // Create stream link
         const linkResult = await stalkerRequest(portal,
             { type: 'itv', action: 'create_link' },
             { cmd: encodeURIComponent(cmd) },
@@ -842,16 +631,13 @@ async function testStream(portal, token) {
         
         if (!streamUrl) return { ok: false, url: '' };
         
-        // Test stream - try to fetch with timeout
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
             
             const testResponse = await fetch(streamUrl, {
                 method: 'HEAD',
-                headers: { 
-                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3' 
-                },
+                headers: { 'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3' },
                 signal: controller.signal,
                 credentials: 'omit'
             });
@@ -859,28 +645,9 @@ async function testStream(portal, token) {
             clearTimeout(timeoutId);
             return { ok: testResponse.ok || testResponse.status === 206, url: streamUrl };
         } catch {
-            // Try GET with range
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
-                
-                const testResponse = await fetch(streamUrl, {
-                    method: 'GET',
-                    headers: { 
-                        'Range': 'bytes=0-1024',
-                        'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3'
-                    },
-                    signal: controller.signal,
-                    credentials: 'omit'
-                });
-                
-                clearTimeout(timeoutId);
-                return { ok: testResponse.ok || testResponse.status === 206, url: streamUrl };
-            } catch {
-                return { ok: false, url: streamUrl };
-            }
+            return { ok: false, url: streamUrl };
         }
-    } catch (error) {
+    } catch {
         return { ok: false, url: '' };
     }
 }
@@ -950,11 +717,7 @@ function renderTable(results, portal, options) {
     const online = results.filter(r => r.online);
     const offline = results.filter(r => !r.online);
     const sorted = [...online.sort((a, b) => b.channels - a.channels), ...offline];
-    
     const best = online.length ? online.reduce((a, b) => a.channels > b.channels ? a : b) : null;
-    
-    const onlineCount = online.length;
-    const totalCount = results.length;
     
     let html = `
         <div style="font-family:monospace; margin-bottom:16px;">
@@ -962,10 +725,10 @@ function renderTable(results, portal, options) {
                 Portal: <b style="color:#f8fafc;">${portal}</b>
             </div>
             <div style="font-size:13px; margin-bottom:10px;">
-                Total MAC: <b>${totalCount}</b> &nbsp;|&nbsp;
-                <span style="color:#22c55e; font-weight:700;">✅ Online: ${onlineCount}</span>
+                Total MAC: <b>${results.length}</b> &nbsp;|&nbsp;
+                <span style="color:#22c55e; font-weight:700;">✅ Online: ${online.length}</span>
                 &nbsp;|&nbsp;
-                <span style="color:#ef4444; font-weight:700;">❌ Gagal: ${totalCount - onlineCount}</span>
+                <span style="color:#ef4444; font-weight:700;">❌ Gagal: ${offline.length}</span>
             </div>
     `;
     
@@ -1017,7 +780,6 @@ function renderTable(results, portal, options) {
         }
         
         const channelCell = `<td style="text-align:center; font-weight:700;">${options.channels ? r.channels : '—'}</td>`;
-        
         const errorHtml = r.error ? `<br><span style="color:#ef4444; font-size:11px;">${r.error}</span>` : '';
         
         html += `
@@ -1034,26 +796,18 @@ function renderTable(results, portal, options) {
         `;
     });
     
-    html += `
-                </tbody>
-            </table>
-        </div>
-    </div>`;
-    
+    html += `</tbody></table></div></div>`;
     return html;
 }
 
 function getExpireColor(expire) {
     if (!expire || expire === '—') return '#6b7280';
-    
     try {
         const date = new Date(expire);
         if (!isNaN(date)) {
             return date < new Date() ? '#dc2626' : '#16a34a';
         }
-    } catch {
-        // Ignore
-    }
+    } catch {}
     return '#6b7280';
 }
 
@@ -1063,17 +817,12 @@ function getExpireColor(expire) {
 function exportCSV(results, portal) {
     const headers = ['No', 'MAC', 'Portal', 'Status', 'Nama', 'Expired', 'Acc Status', 'Channel', 'Stream', 'Ping (ms)', 'Error'];
     const rows = results.map(r => [
-        r.no,
-        r.mac,
-        portal,
+        r.no, r.mac, portal,
         r.online ? 'ONLINE' : 'GAGAL',
-        r.name,
-        r.expire,
-        r.acc_status,
+        r.name, r.expire, r.acc_status,
         r.channels,
         r.stream_ok ? 'OK' : (r.stream_ok === false ? 'MATI' : '—'),
-        r.ping_ms,
-        r.error
+        r.ping_ms, r.error
     ]);
     
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -1086,7 +835,6 @@ function exportCSV(results, portal) {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    
     addLog(`📊 CSV exported: mac_test_${timestamp}.csv`, 'success');
 }
 
@@ -1099,11 +847,9 @@ async function runTest() {
         return;
     }
     
-    // Reset UI
     document.getElementById('resultContainer').innerHTML = '';
     clearLog();
     
-    // Validate portal
     const portal = document.getElementById('portalUrl').value.trim().replace(/\/+$/, '');
     if (!validateURL(portal)) {
         addLog('❌ Portal URL tidak valid', 'error');
@@ -1111,7 +857,6 @@ async function runTest() {
         return;
     }
     
-    // Get MACs
     const macList = getMACs();
     if (!macList.length) {
         addLog('⚠️ Tidak ada MAC valid', 'error');
@@ -1119,14 +864,12 @@ async function runTest() {
         return;
     }
     
-    // Reset MAC status
     macList.forEach(({ index }) => {
         const statusEl = document.getElementById(`status_${index}`);
         statusEl.textContent = '⏳ Menunggu...';
         statusEl.style.color = '#60a5fa';
     });
     
-    // Get options
     const options = {
         profile: document.getElementById('chkProfile').checked,
         channels: document.getElementById('chkChannels').checked,
@@ -1135,10 +878,7 @@ async function runTest() {
     };
     
     const parallel = parseInt(document.getElementById('parallelSlider').value);
-    const proxyType = getSelectedProxy();
-    const proxyName = document.getElementById('selectedProxy').textContent;
     
-    // Start test
     isRunning = true;
     document.getElementById('btnRun').disabled = true;
     document.getElementById('btnRun').textContent = '⏳ Testing...';
@@ -1146,27 +886,21 @@ async function runTest() {
     
     addLog(`🚀 Starting test on ${portal}`, 'info');
     addLog(`📊 ${macList.length} MAC | Parallel: ${parallel}`, 'info');
-    addLog(`🌐 Proxy: ${proxyName}`, 'info');
     addLog(`⚙️ Profile: ${options.profile} | Channels: ${options.channels} | Stream: ${options.stream}`, 'info');
     
     const results = [];
     const total = macList.length;
     let completed = 0;
     
-    // Process in batches
     for (let i = 0; i < macList.length; i += parallel) {
         const batch = macList.slice(i, i + parallel);
-        const promises = batch.map(({ index, mac }) => 
-            testOneMAC(portal, mac, index, options)
-        );
-        
+        const promises = batch.map(({ index, mac }) => testOneMAC(portal, mac, index, options));
         const batchResults = await Promise.all(promises);
         
         batchResults.forEach((result, idx) => {
             const macInfo = batch[idx];
             results.push(result);
             
-            // Update status
             const statusEl = document.getElementById(`status_${macInfo.index}`);
             if (result.online) {
                 const chText = options.channels ? ` | ${result.channels} ch` : '';
@@ -1179,7 +913,6 @@ async function runTest() {
                 statusEl.style.color = '#dc2626';
             }
             
-            // Log
             const status = result.online ? '✅ ONLINE' : '❌ GAGAL';
             let logMsg = `[${result.mac}] ${status} | ${result.ping_ms} ms`;
             if (options.channels) logMsg += ` | ${result.channels} ch`;
@@ -1194,23 +927,17 @@ async function runTest() {
         document.getElementById('progressText').textContent = `${progress}%`;
         
         const onlineNow = results.filter(r => r.online).length;
-        document.getElementById('statusLabel').textContent = 
-            `Progress: ${completed}/${total} | ✅ Online: ${onlineNow}`;
+        document.getElementById('statusLabel').textContent = `Progress: ${completed}/${total} | ✅ Online: ${onlineNow}`;
     }
     
-    // Display results
-    const resultContainer = document.getElementById('resultContainer');
-    resultContainer.innerHTML = renderTable(results, portal, options);
+    document.getElementById('resultContainer').innerHTML = renderTable(results, portal, options);
     
-    // Export CSV
     if (options.exportCSV) {
         exportCSV(results, portal);
     }
     
-    // Final status
     const onlineCount = results.filter(r => r.online).length;
-    document.getElementById('statusLabel').textContent = 
-        `✅ Selesai — ${results.length} MAC | Online: ${onlineCount} | Gagal: ${results.length - onlineCount}`;
+    document.getElementById('statusLabel').textContent = `✅ Selesai — ${results.length} MAC | Online: ${onlineCount} | Gagal: ${results.length - onlineCount}`;
     
     addLog(`\n${'='.repeat(50)}`, 'info');
     addLog(`✅ Selesai: ${results.length} MAC`, 'success');
@@ -1259,26 +986,22 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnRun').addEventListener('click', runTest);
     document.getElementById('btnClear').addEventListener('click', clearAll);
     
-    // Enter key support for MAC inputs
     for (let i = 0; i < MAX_MAC; i++) {
         document.getElementById(`mac_${i}`).addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
-                const next = document.getElementById(`mac_${i+1}`);
+                const next = document.getElementById(`mac_${parseInt(this.dataset.index) + 1}`);
                 if (next) next.focus();
             }
         });
     }
     
-    // Portal URL Enter key
     document.getElementById('portalUrl').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            document.getElementById('mac_0').focus();
-        }
+        if (e.key === 'Enter') document.getElementById('mac_0').focus();
     });
     
     addLog('📡 MAC Multi-Tester siap digunakan!', 'info');
     addLog('💡 Isi portal URL dan MAC address, lalu klik RUN', 'info');
-    addLog('🌐 Pilih proxy yang bekerja untuk server Anda', 'info');
+    addLog('🔧 Menggunakan proxy: /api/proxy', 'info');
 });
 
 // ============================================================
