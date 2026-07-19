@@ -558,6 +558,7 @@ async function doHandshake(portal, mac) {
             { mac: mac }
         );
         
+        // Cek response - support multiple formats
         if (result.js && result.js.token) {
             return result.js.token;
         }
@@ -577,7 +578,7 @@ async function doHandshake(portal, mac) {
 }
 
 // ============================================================
-//  GET PROFILE - Dengan multiple format support
+//  GET PROFILE - Dengan support double-encoded JSON
 // ============================================================
 async function getProfile(portal, token) {
     try {
@@ -592,7 +593,17 @@ async function getProfile(portal, token) {
         
         console.log("👤 PROFILE RESULT =", result);
         
-        const js = result?.js || result || {};
+        // Parse js jika string
+        let js = result?.js || {};
+        if (typeof js === 'string') {
+            try {
+                js = JSON.parse(js);
+            } catch (e) {
+                console.log("Failed to parse js string:", e);
+                js = {};
+            }
+        }
+        
         const name = `${js.fname || ''} ${js.lname || ''}`.trim() || js.login || js.username || '';
         const expire = js.end_date || js.expire_date || js.expires || '';
         const status = js.status || js.account_status || js.state || '';
@@ -608,7 +619,7 @@ async function getProfile(portal, token) {
 }
 
 // ============================================================
-//  COUNT CHANNELS - Dengan multiple format support
+//  COUNT CHANNELS - Dengan support double-encoded JSON
 // ============================================================
 async function countChannels(portal, token) {
     try {
@@ -621,63 +632,63 @@ async function countChannels(portal, token) {
             }
         );
         
-        console.log("📊 CHANNEL RESULT =", result);
+        console.log("📊 RAW RESULT:", result);
+        console.log("📊 Type of js:", typeof result?.js);
         
+        // 🔥 PERBAIKAN: js adalah STRING, bukan OBJECT
         let data = [];
+        let total = 0;
         
-        if (result?.js?.data && Array.isArray(result.js.data)) {
-            data = result.js.data;
-        } else if (result?.data && Array.isArray(result.data)) {
-            data = result.data;
-        } else if (result?.js?.total_items && result?.js?.data) {
-            data = result.js.data;
-        } else if (Array.isArray(result)) {
-            data = result;
-        } else if (result?.js && Array.isArray(result.js)) {
-            data = result.js;
+        // Cek apakah js adalah string (double-encoded JSON)
+        if (typeof result?.js === 'string') {
+            try {
+                const parsedJs = JSON.parse(result.js);
+                console.log("📊 Parsed js string:", parsedJs);
+                
+                if (parsedJs?.total_items) {
+                    total = parseInt(parsedJs.total_items);
+                }
+                if (parsedJs?.data && Array.isArray(parsedJs.data)) {
+                    data = parsedJs.data;
+                }
+            } catch (e) {
+                console.log("Failed to parse js string:", e);
+            }
         }
         
-        console.log("📊 CHANNEL COUNT =", data.length);
-        return data.length;
+        // Jika js adalah object (format normal)
+        if (typeof result?.js === 'object' && result.js !== null) {
+            if (result.js.data && Array.isArray(result.js.data)) {
+                data = result.js.data;
+                total = data.length;
+            }
+            if (result.js.total_items) {
+                total = parseInt(result.js.total_items);
+            }
+        }
+        
+        // Fallback: cek langsung di root
+        if (!data.length && result?.data && Array.isArray(result.data)) {
+            data = result.data;
+            total = data.length;
+        }
+        if (!total && result?.total_items) {
+            total = parseInt(result.total_items);
+        }
+        
+        console.log("📊 CHANNEL DATA LENGTH:", data.length);
+        console.log("📊 TOTAL ITEMS:", total);
+        
+        return total || data.length || 0;
         
     } catch (error) {
-        console.error('CountChannels error:', error);
-        
-        try {
-            const result = await stalkerRequest(portal,
-                { type: 'itv', action: 'get_ordered_list' },
-                { genre: '*', p: '1' },
-                { 
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    mac: 'default'
-                }
-            );
-            
-            console.log("📊 FALLBACK RESULT =", result);
-            
-            if (result?.js?.total_items) {
-                return parseInt(result.js.total_items);
-            }
-            if (result?.js?.data && Array.isArray(result.js.data)) {
-                return result.js.data.length;
-            }
-            if (result?.data && Array.isArray(result.data)) {
-                return result.data.length;
-            }
-            if (result?.total_items) {
-                return parseInt(result.total_items);
-            }
-            
-            return 0;
-        } catch (fallbackError) {
-            console.error('Fallback error:', fallbackError);
-            return 0;
-        }
+        console.error('❌ CountChannels error:', error);
+        return 0;
     }
 }
 
 // ============================================================
-//  TEST STREAM - Dengan multiple format support
+//  TEST STREAM - Dengan support double-encoded JSON
 // ============================================================
 async function testStream(portal, token) {
     try {
@@ -690,17 +701,34 @@ async function testStream(portal, token) {
             }
         );
         
-        console.log("🎬 STREAM LIST =", listResult);
+        console.log("🎬 STREAM RAW:", listResult);
         
+        // 🔥 PERBAIKAN: js adalah STRING
         let data = [];
-        if (listResult?.js?.data && Array.isArray(listResult.js.data)) {
-            data = listResult.js.data;
-        } else if (listResult?.data && Array.isArray(listResult.data)) {
+        
+        // Cek apakah js adalah string (double-encoded JSON)
+        if (typeof listResult?.js === 'string') {
+            try {
+                const parsedJs = JSON.parse(listResult.js);
+                console.log("🎬 Parsed js string:", parsedJs);
+                if (parsedJs?.data && Array.isArray(parsedJs.data)) {
+                    data = parsedJs.data;
+                }
+            } catch (e) {
+                console.log("Failed to parse js string:", e);
+            }
+        }
+        
+        // Jika js adalah object (format normal)
+        if (typeof listResult?.js === 'object' && listResult.js !== null) {
+            if (listResult.js.data && Array.isArray(listResult.js.data)) {
+                data = listResult.js.data;
+            }
+        }
+        
+        // Fallback: cek langsung di root
+        if (!data.length && listResult?.data && Array.isArray(listResult.data)) {
             data = listResult.data;
-        } else if (Array.isArray(listResult)) {
-            data = listResult;
-        } else if (listResult?.js && Array.isArray(listResult.js)) {
-            data = listResult.js;
         }
         
         if (!data.length) {
@@ -708,6 +736,7 @@ async function testStream(portal, token) {
             return { ok: false, url: '' };
         }
         
+        // Cari channel pertama dengan cmd
         let firstChannel = null;
         for (let i = 0; i < Math.min(data.length, 10); i++) {
             if (data[i]?.cmd) {
@@ -734,17 +763,29 @@ async function testStream(portal, token) {
             }
         );
         
-        console.log("🔗 CREATE LINK =", linkResult);
+        console.log("🔗 CREATE LINK RAW:", linkResult);
         
+        // 🔥 PERBAIKAN: js adalah STRING
         let raw = '';
-        if (linkResult?.js?.cmd) {
-            raw = linkResult.js.cmd.toString();
-        } else if (linkResult?.js?.url) {
-            raw = linkResult.js.url.toString();
-        } else if (linkResult?.cmd) {
-            raw = linkResult.cmd.toString();
-        } else if (linkResult?.url) {
-            raw = linkResult.url.toString();
+        
+        // Cek apakah js adalah string (double-encoded JSON)
+        if (typeof linkResult?.js === 'string') {
+            try {
+                const parsedJs = JSON.parse(linkResult.js);
+                raw = parsedJs?.cmd || parsedJs?.url || '';
+            } catch (e) {
+                console.log("Failed to parse js string:", e);
+            }
+        }
+        
+        // Jika js adalah object (format normal)
+        if (typeof linkResult?.js === 'object' && linkResult.js !== null) {
+            raw = linkResult.js?.cmd || linkResult.js?.url || '';
+        }
+        
+        // Fallback: cek langsung di root
+        if (!raw) {
+            raw = linkResult?.cmd || linkResult?.url || '';
         }
         
         console.log("🔗 RAW URL:", raw);
@@ -779,7 +820,7 @@ async function testStream(portal, token) {
             return { ok: false, url: streamUrl };
         }
     } catch (error) {
-        console.error('TestStream error:', error);
+        console.error('❌ TestStream error:', error);
         return { ok: false, url: '' };
     }
 }
