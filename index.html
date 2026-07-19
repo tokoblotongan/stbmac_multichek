@@ -499,12 +499,10 @@ async function proxyRequest(url, options = {}) {
         params.set("mac", options.mac);
     }
     
-    // Kirim token dari browser
     if (options.token) {
         params.set("token", options.token);
     }
     
-    // Kirim cookie dari browser
     if (options.cookie) {
         params.set("cookie", options.cookie);
     }
@@ -546,7 +544,6 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const mac = session.mac || '';
     const data = sessionData[mac] || {};
     
-    // Kirim token dan cookie dari browser
     return await proxyRequest(url.toString(), {
         mac: mac,
         token: data.token,
@@ -562,7 +559,6 @@ async function doHandshake(portal, mac) {
             { mac: mac }
         );
         
-        // Cek response - support multiple formats
         let token = null;
         if (result.js && result.js.token) {
             token = result.js.token;
@@ -573,7 +569,6 @@ async function doHandshake(portal, mac) {
         }
         
         if (token) {
-            // Simpan token dan cookie di browser
             sessionData[mac] = {
                 token: token,
                 cookie: `mac=${mac}; stb_lang=en; timezone=Europe/Amsterdam`
@@ -591,12 +586,10 @@ async function doHandshake(portal, mac) {
 }
 
 // ============================================================
-//  GET PROFILE - Dengan support double-encoded JSON
+//  GET PROFILE
 // ============================================================
 async function getProfile(portal, mac) {
     try {
-        const data = sessionData[mac] || {};
-        
         const result = await stalkerRequest(portal,
             { type: 'account_info', action: 'get_main_info' },
             {},
@@ -605,7 +598,6 @@ async function getProfile(portal, mac) {
         
         console.log("👤 PROFILE RESULT:", result);
         
-        // Parse js jika string
         let js = result?.js || {};
         if (typeof js === 'string') {
             try {
@@ -631,7 +623,7 @@ async function getProfile(portal, mac) {
 }
 
 // ============================================================
-//  COUNT CHANNELS - Dengan support double-encoded JSON
+//  COUNT CHANNELS
 // ============================================================
 async function countChannels(portal, mac) {
     try {
@@ -642,12 +634,10 @@ async function countChannels(portal, mac) {
         );
         
         console.log("📊 CHANNEL RAW:", result);
-        console.log("📊 Type of js:", typeof result?.js);
         
         let data = [];
         let total = 0;
         
-        // Cek apakah js adalah string (double-encoded JSON)
         if (typeof result?.js === 'string') {
             try {
                 const parsedJs = JSON.parse(result.js);
@@ -664,7 +654,6 @@ async function countChannels(portal, mac) {
             }
         }
         
-        // Jika js adalah object (format normal)
         if (typeof result?.js === 'object' && result.js !== null) {
             if (result.js.data && Array.isArray(result.js.data)) {
                 data = result.js.data;
@@ -675,7 +664,6 @@ async function countChannels(portal, mac) {
             }
         }
         
-        // Fallback: cek langsung di root
         if (!data.length && result?.data && Array.isArray(result.data)) {
             data = result.data;
             total = data.length;
@@ -695,7 +683,7 @@ async function countChannels(portal, mac) {
 }
 
 // ============================================================
-//  TEST STREAM - Dengan support double-encoded JSON
+//  TEST STREAM - Dengan handling Mixed Content
 // ============================================================
 async function testStream(portal, mac) {
     try {
@@ -709,7 +697,6 @@ async function testStream(portal, mac) {
         
         let data = [];
         
-        // Cek apakah js adalah string (double-encoded JSON)
         if (typeof listResult?.js === 'string') {
             try {
                 const parsedJs = JSON.parse(listResult.js);
@@ -722,14 +709,12 @@ async function testStream(portal, mac) {
             }
         }
         
-        // Jika js adalah object (format normal)
         if (typeof listResult?.js === 'object' && listResult.js !== null) {
             if (listResult.js.data && Array.isArray(listResult.js.data)) {
                 data = listResult.js.data;
             }
         }
         
-        // Fallback: cek langsung di root
         if (!data.length && listResult?.data && Array.isArray(listResult.data)) {
             data = listResult.data;
         }
@@ -739,7 +724,6 @@ async function testStream(portal, mac) {
             return { ok: false, url: '' };
         }
         
-        // Cari channel pertama dengan cmd
         let firstChannel = null;
         for (let i = 0; i < Math.min(data.length, 10); i++) {
             if (data[i]?.cmd) {
@@ -767,7 +751,6 @@ async function testStream(portal, mac) {
         
         let raw = '';
         
-        // Cek apakah js adalah string (double-encoded JSON)
         if (typeof linkResult?.js === 'string') {
             try {
                 const parsedJs = JSON.parse(linkResult.js);
@@ -777,31 +760,172 @@ async function testStream(portal, mac) {
             }
         }
         
-        // Jika js adalah object (format normal)
         if (typeof linkResult?.js === 'object' && linkResult.js !== null) {
             raw = linkResult.js?.cmd || linkResult.js?.url || '';
         }
         
-        // Fallback: cek langsung di root
         if (!raw) {
             raw = linkResult?.cmd || linkResult?.url || '';
         }
         
         console.log("🔗 RAW URL:", raw);
         
+        // Ekstrak URL dari raw
+        let streamUrl = '';
         const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
-        const streamUrl = urlMatch ? urlMatch[1] : '';
+        if (urlMatch) {
+            streamUrl = urlMatch[1];
+        }
+        
+        if (!streamUrl && cmd) {
+            const cmdMatch = cmd.match(/(https?:\/\/[^\s]+)/);
+            if (cmdMatch) {
+                streamUrl = cmdMatch[1];
+            }
+        }
         
         if (!streamUrl) {
             console.log("⚠️ No stream URL found");
             return { ok: false, url: '' };
         }
         
-        console.log("🎬 Stream URL:", streamUrl);
+        console.log("🎬 Stream URL found:", streamUrl);
         
+        // ==========================================================
+        //  STRATEGI TEST STREAM (Handle Mixed Content)
+        // ==========================================================
+        
+        // Strategy 1: Coba HTTPS
+        if (streamUrl.startsWith('http://')) {
+            const httpsUrl = streamUrl.replace('http://', 'https://');
+            console.log("🔄 Trying HTTPS version:", httpsUrl);
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const testResponse = await fetch(httpsUrl, {
+                    method: 'HEAD',
+                    headers: { 'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3' },
+                    signal: controller.signal,
+                    credentials: 'omit'
+                });
+                
+                clearTimeout(timeoutId);
+                if (testResponse.ok || testResponse.status === 206) {
+                    console.log("✅ HTTPS stream works!");
+                    return { ok: true, url: httpsUrl };
+                }
+            } catch (e) {
+                console.log("HTTPS attempt failed:", e.message);
+            }
+        }
+        
+        // Strategy 2: Test via Proxy (bypass mixed content)
         try {
+            console.log("🔄 Testing stream via proxy...");
+            
+            const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
+            
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            const testResponse = await fetch(proxyTestUrl, {
+                method: 'HEAD',
+                headers: { 
+                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
+                    'Accept': '*/*'
+                },
+                signal: controller.signal,
+                credentials: 'omit'
+            });
+            
+            clearTimeout(timeoutId);
+            const ok = testResponse.ok || testResponse.status === 206;
+            console.log("🎬 Stream test via proxy:", ok ? '✅ OK' : '❌ FAILED');
+            
+            if (ok) {
+                return { ok: true, url: streamUrl };
+            }
+        } catch (proxyError) {
+            console.log("Proxy stream test failed:", proxyError.message);
+        }
+        
+        // Strategy 3: Test via HEAD dengan proxy header
+        try {
+            console.log("🔄 Testing stream with HEAD via proxy...");
+            
+            const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            const testResponse = await fetch(proxyTestUrl, {
+                method: 'HEAD',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
+                    'Accept': '*/*',
+                    'Range': 'bytes=0-0'
+                },
+                signal: controller.signal,
+                credentials: 'omit'
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // Accept 200, 206, 302, 301
+            const ok = testResponse.ok || 
+                      testResponse.status === 206 || 
+                      testResponse.status === 302 || 
+                      testResponse.status === 301;
+            
+            console.log("🎬 Stream test with Range:", ok ? '✅ OK' : '❌ FAILED');
+            
+            if (ok) {
+                return { ok: true, url: streamUrl };
+            }
+        } catch (rangeError) {
+            console.log("Range request failed:", rangeError.message);
+        }
+        
+        // Strategy 4: Test via GET (bukan HEAD) - untuk stream biasanya ini lebih akurat
+        try {
+            console.log("🔄 Testing stream with GET (first 1KB)...");
+            
+            const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            const testResponse = await fetch(proxyTestUrl, {
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
+                    'Accept': '*/*',
+                    'Range': 'bytes=0-1024'
+                },
+                signal: controller.signal,
+                credentials: 'omit'
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // Untuk GET dengan Range, 206 = partial content (berarti stream aktif)
+            const ok = testResponse.ok || testResponse.status === 206;
+            console.log("🎬 Stream GET test:", ok ? '✅ OK' : '❌ FAILED', 'Status:', testResponse.status);
+            
+            return { ok: ok, url: streamUrl };
+            
+        } catch (getError) {
+            console.log("GET request failed:", getError.message);
+        }
+        
+        // Strategy 5: Fallback - Direct fetch (mungkin berhasil di beberapa browser)
+        try {
+            console.log("🔄 Testing direct (last resort)...");
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
             
             const testResponse = await fetch(streamUrl, {
                 method: 'HEAD',
@@ -812,14 +936,21 @@ async function testStream(portal, mac) {
             
             clearTimeout(timeoutId);
             const ok = testResponse.ok || testResponse.status === 206;
-            console.log("🎬 Stream test:", ok ? '✅ OK' : '❌ FAILED');
-            return { ok: ok, url: streamUrl };
-        } catch (streamError) {
-            console.log("🎬 Stream test error:", streamError.message);
-            return { ok: false, url: streamUrl };
+            console.log("🎬 Stream test direct:", ok ? '✅ OK' : '❌ FAILED');
+            
+            if (ok) {
+                return { ok: true, url: streamUrl };
+            }
+        } catch (directError) {
+            console.log("Direct fetch failed:", directError.message);
         }
+        
+        // Semua strategi gagal
+        console.log("❌ All stream test strategies failed");
+        return { ok: false, url: streamUrl };
+        
     } catch (error) {
-        console.error('TestStream error:', error);
+        console.error('❌ TestStream error:', error);
         return { ok: false, url: '' };
     }
 }
@@ -1016,7 +1147,6 @@ async function runTest() {
         return;
     }
     
-    // Reset session data
     for (const key in sessionData) {
         delete sessionData[key];
     }
@@ -1131,7 +1261,6 @@ function clearAll() {
         document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
     }
     
-    // Clear session data
     for (const key in sessionData) {
         delete sessionData[key];
     }
