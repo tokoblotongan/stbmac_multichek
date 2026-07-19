@@ -496,7 +496,6 @@ async function proxyRequest(url, options = {}) {
         params.set("mac", options.mac);
     }
     
-    // Kirim token jika ada di headers.Authorization
     if (options.headers && options.headers.Authorization) {
         const token = options.headers.Authorization.replace("Bearer ", "");
         params.set("token", token);
@@ -536,7 +535,6 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         JsHttpRequest: '1-xml'
     });
     
-    // GABUNGKAN session.headers
     const headers = {
         'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
         'X-Requested-With': 'XMLHttpRequest',
@@ -560,7 +558,6 @@ async function doHandshake(portal, mac) {
             { mac: mac }
         );
         
-        // Cek response - support multiple formats
         if (result.js && result.js.token) {
             return result.js.token;
         }
@@ -579,6 +576,9 @@ async function doHandshake(portal, mac) {
     }
 }
 
+// ============================================================
+//  GET PROFILE - Dengan multiple format support
+// ============================================================
 async function getProfile(portal, token) {
     try {
         const result = await stalkerRequest(portal,
@@ -589,10 +589,17 @@ async function getProfile(portal, token) {
                 mac: 'default'
             }
         );
-        const js = result.js || {};
-        const name = `${js.fname || ''} ${js.lname || ''}`.trim() || js.login || '';
-        const expire = js.end_date || js.expire_date || '';
-        const status = js.status || js.account_status || '';
+        
+        console.log("👤 PROFILE RESULT =", result);
+        
+        const js = result?.js || result || {};
+        const name = `${js.fname || ''} ${js.lname || ''}`.trim() || js.login || js.username || '';
+        const expire = js.end_date || js.expire_date || js.expires || '';
+        const status = js.status || js.account_status || js.state || '';
+        
+        console.log("👤 Name:", name || '(empty)');
+        console.log("👤 Expire:", expire || '(empty)');
+        
         return { name, expire, status };
     } catch (error) {
         console.error('GetProfile error:', error);
@@ -600,6 +607,9 @@ async function getProfile(portal, token) {
     }
 }
 
+// ============================================================
+//  COUNT CHANNELS - Dengan multiple format support
+// ============================================================
 async function countChannels(portal, token) {
     try {
         const result = await stalkerRequest(portal,
@@ -610,10 +620,29 @@ async function countChannels(portal, token) {
                 mac: 'default'
             }
         );
-        const data = result.js?.data || [];
-        return Array.isArray(data) ? data.length : 0;
+        
+        console.log("📊 CHANNEL RESULT =", result);
+        
+        let data = [];
+        
+        if (result?.js?.data && Array.isArray(result.js.data)) {
+            data = result.js.data;
+        } else if (result?.data && Array.isArray(result.data)) {
+            data = result.data;
+        } else if (result?.js?.total_items && result?.js?.data) {
+            data = result.js.data;
+        } else if (Array.isArray(result)) {
+            data = result;
+        } else if (result?.js && Array.isArray(result.js)) {
+            data = result.js;
+        }
+        
+        console.log("📊 CHANNEL COUNT =", data.length);
+        return data.length;
+        
     } catch (error) {
         console.error('CountChannels error:', error);
+        
         try {
             const result = await stalkerRequest(portal,
                 { type: 'itv', action: 'get_ordered_list' },
@@ -623,14 +652,33 @@ async function countChannels(portal, token) {
                     mac: 'default'
                 }
             );
-            const js = result.js || {};
-            return js.total_items || js.data?.length || 0;
-        } catch {
+            
+            console.log("📊 FALLBACK RESULT =", result);
+            
+            if (result?.js?.total_items) {
+                return parseInt(result.js.total_items);
+            }
+            if (result?.js?.data && Array.isArray(result.js.data)) {
+                return result.js.data.length;
+            }
+            if (result?.data && Array.isArray(result.data)) {
+                return result.data.length;
+            }
+            if (result?.total_items) {
+                return parseInt(result.total_items);
+            }
+            
+            return 0;
+        } catch (fallbackError) {
+            console.error('Fallback error:', fallbackError);
             return 0;
         }
     }
 }
 
+// ============================================================
+//  TEST STREAM - Dengan multiple format support
+// ============================================================
 async function testStream(portal, token) {
     try {
         const listResult = await stalkerRequest(portal,
@@ -642,11 +690,40 @@ async function testStream(portal, token) {
             }
         );
         
-        const data = listResult.js?.data || [];
-        if (!data.length) return { ok: false, url: '' };
+        console.log("🎬 STREAM LIST =", listResult);
         
-        const cmd = data[0].cmd;
-        if (!cmd) return { ok: false, url: '' };
+        let data = [];
+        if (listResult?.js?.data && Array.isArray(listResult.js.data)) {
+            data = listResult.js.data;
+        } else if (listResult?.data && Array.isArray(listResult.data)) {
+            data = listResult.data;
+        } else if (Array.isArray(listResult)) {
+            data = listResult;
+        } else if (listResult?.js && Array.isArray(listResult.js)) {
+            data = listResult.js;
+        }
+        
+        if (!data.length) {
+            console.log("⚠️ No channel data found");
+            return { ok: false, url: '' };
+        }
+        
+        let firstChannel = null;
+        for (let i = 0; i < Math.min(data.length, 10); i++) {
+            if (data[i]?.cmd) {
+                firstChannel = data[i];
+                break;
+            }
+        }
+        
+        if (!firstChannel) {
+            console.log("⚠️ No channel with cmd found");
+            return { ok: false, url: '' };
+        }
+        
+        const cmd = firstChannel.cmd;
+        console.log("🎬 Selected channel:", firstChannel.name || 'Unknown');
+        console.log("🎬 CMD:", cmd);
         
         const linkResult = await stalkerRequest(portal,
             { type: 'itv', action: 'create_link' },
@@ -657,11 +734,30 @@ async function testStream(portal, token) {
             }
         );
         
-        const raw = (linkResult.js?.cmd || linkResult.js?.url || '').toString();
+        console.log("🔗 CREATE LINK =", linkResult);
+        
+        let raw = '';
+        if (linkResult?.js?.cmd) {
+            raw = linkResult.js.cmd.toString();
+        } else if (linkResult?.js?.url) {
+            raw = linkResult.js.url.toString();
+        } else if (linkResult?.cmd) {
+            raw = linkResult.cmd.toString();
+        } else if (linkResult?.url) {
+            raw = linkResult.url.toString();
+        }
+        
+        console.log("🔗 RAW URL:", raw);
+        
         const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
         const streamUrl = urlMatch ? urlMatch[1] : '';
         
-        if (!streamUrl) return { ok: false, url: '' };
+        if (!streamUrl) {
+            console.log("⚠️ No stream URL found");
+            return { ok: false, url: '' };
+        }
+        
+        console.log("🎬 Stream URL:", streamUrl);
         
         try {
             const controller = new AbortController();
@@ -675,11 +771,15 @@ async function testStream(portal, token) {
             });
             
             clearTimeout(timeoutId);
-            return { ok: testResponse.ok || testResponse.status === 206, url: streamUrl };
-        } catch {
+            const ok = testResponse.ok || testResponse.status === 206;
+            console.log("🎬 Stream test:", ok ? '✅ OK' : '❌ FAILED');
+            return { ok: ok, url: streamUrl };
+        } catch (streamError) {
+            console.log("🎬 Stream test error:", streamError.message);
             return { ok: false, url: streamUrl };
         }
-    } catch {
+    } catch (error) {
+        console.error('TestStream error:', error);
         return { ok: false, url: '' };
     }
 }
