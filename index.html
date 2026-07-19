@@ -387,6 +387,9 @@ const MAX_MAC = 10;
 const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
 let isRunning = false;
 
+// Session data per MAC (disimpan di browser)
+const sessionData = {};
+
 // ============================================================
 //  UI INITIALIZATION
 // ============================================================
@@ -486,7 +489,7 @@ function getMACs() {
 }
 
 // ============================================================
-//  PROXY REQUEST - Hanya kirim mac (token dikelola proxy)
+//  PROXY REQUEST - Kirim semua data dari browser
 // ============================================================
 async function proxyRequest(url, options = {}) {
     const params = new URLSearchParams();
@@ -496,8 +499,15 @@ async function proxyRequest(url, options = {}) {
         params.set("mac", options.mac);
     }
     
-    // TIDAK kirim token sebagai query parameter
-    // Proxy akan mengelola token di session
+    // Kirim token dari browser
+    if (options.token) {
+        params.set("token", options.token);
+    }
+    
+    // Kirim cookie dari browser
+    if (options.cookie) {
+        params.set("cookie", options.cookie);
+    }
     
     const api = `/api/proxy?${params.toString()}`;
     
@@ -533,41 +543,43 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         JsHttpRequest: '1-xml'
     });
     
-    const headers = {
-        'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': `${portal}/portal.php`,
-        ...(session.headers || {})
-    };
-    
     const mac = session.mac || '';
+    const data = sessionData[mac] || {};
     
-    // Hanya kirim mac, token akan dikelola oleh proxy session
-    return await proxyRequest(url.toString(), { 
-        headers, 
-        mac
+    // Kirim token dan cookie dari browser
+    return await proxyRequest(url.toString(), {
+        mac: mac,
+        token: data.token,
+        cookie: data.cookie
     });
 }
 
 async function doHandshake(portal, mac) {
     try {
-        // Proxy akan otomatis menyimpan token di session
         const result = await stalkerRequest(portal, 
             { type: 'stb', action: 'handshake' },
             {},
             { mac: mac }
         );
         
-        // Response dari proxy (token sudah disimpan di session)
-        // Cek apakah handshake berhasil
+        // Cek response - support multiple formats
+        let token = null;
         if (result.js && result.js.token) {
-            return result.js.token;
+            token = result.js.token;
+        } else if (result.token) {
+            token = result.token;
+        } else if (result.js && result.js.auth === 1) {
+            token = 'authenticated';
         }
-        if (result.token) {
-            return result.token;
-        }
-        if (result.js && result.js.auth === 1) {
-            return 'authenticated';
+        
+        if (token) {
+            // Simpan token dan cookie di browser
+            sessionData[mac] = {
+                token: token,
+                cookie: `mac=${mac}; stb_lang=en; timezone=Europe/Amsterdam`
+            };
+            console.log(`🔑 Token saved for ${mac}:`, token.substring(0, 20) + '...');
+            return token;
         }
         
         console.log('Handshake response:', result);
@@ -581,18 +593,17 @@ async function doHandshake(portal, mac) {
 // ============================================================
 //  GET PROFILE - Dengan support double-encoded JSON
 // ============================================================
-async function getProfile(portal, token) {
+async function getProfile(portal, mac) {
     try {
+        const data = sessionData[mac] || {};
+        
         const result = await stalkerRequest(portal,
             { type: 'account_info', action: 'get_main_info' },
             {},
-            { 
-                headers: { 'Authorization': `Bearer ${token}` },
-                mac: 'default'
-            }
+            { mac: mac }
         );
         
-        console.log("👤 PROFILE RESULT =", result);
+        console.log("👤 PROFILE RESULT:", result);
         
         // Parse js jika string
         let js = result?.js || {};
@@ -622,18 +633,15 @@ async function getProfile(portal, token) {
 // ============================================================
 //  COUNT CHANNELS - Dengan support double-encoded JSON
 // ============================================================
-async function countChannels(portal, token) {
+async function countChannels(portal, mac) {
     try {
         const result = await stalkerRequest(portal,
             { type: 'itv', action: 'get_all_channels' },
             {},
-            { 
-                headers: { 'Authorization': `Bearer ${token}` },
-                mac: 'default'
-            }
+            { mac: mac }
         );
         
-        console.log("📊 RAW RESULT:", result);
+        console.log("📊 CHANNEL RAW:", result);
         console.log("📊 Type of js:", typeof result?.js);
         
         let data = [];
@@ -676,13 +684,12 @@ async function countChannels(portal, token) {
             total = parseInt(result.total_items);
         }
         
-        console.log("📊 CHANNEL DATA LENGTH:", data.length);
-        console.log("📊 TOTAL ITEMS:", total);
+        console.log("📊 CHANNEL COUNT:", total || data.length || 0);
         
         return total || data.length || 0;
         
     } catch (error) {
-        console.error('❌ CountChannels error:', error);
+        console.error('CountChannels error:', error);
         return 0;
     }
 }
@@ -690,15 +697,12 @@ async function countChannels(portal, token) {
 // ============================================================
 //  TEST STREAM - Dengan support double-encoded JSON
 // ============================================================
-async function testStream(portal, token) {
+async function testStream(portal, mac) {
     try {
         const listResult = await stalkerRequest(portal,
             { type: 'itv', action: 'get_ordered_list' },
             { genre: '*', p: '1' },
-            { 
-                headers: { 'Authorization': `Bearer ${token}` },
-                mac: 'default'
-            }
+            { mac: mac }
         );
         
         console.log("🎬 STREAM RAW:", listResult);
@@ -756,10 +760,7 @@ async function testStream(portal, token) {
         const linkResult = await stalkerRequest(portal,
             { type: 'itv', action: 'create_link' },
             { cmd: encodeURIComponent(cmd) },
-            { 
-                headers: { 'Authorization': `Bearer ${token}` },
-                mac: 'default'
-            }
+            { mac: mac }
         );
         
         console.log("🔗 CREATE LINK RAW:", linkResult);
@@ -818,7 +819,7 @@ async function testStream(portal, token) {
             return { ok: false, url: streamUrl };
         }
     } catch (error) {
-        console.error('❌ TestStream error:', error);
+        console.error('TestStream error:', error);
         return { ok: false, url: '' };
     }
 }
@@ -857,18 +858,18 @@ async function testOneMAC(portal, mac, index, options) {
         }
         
         if (options.profile) {
-            const profile = await getProfile(portal, token);
+            const profile = await getProfile(portal, mac);
             result.name = profile.name;
             result.expire = profile.expire;
             result.acc_status = profile.status;
         }
         
         if (options.channels) {
-            result.channels = await countChannels(portal, token);
+            result.channels = await countChannels(portal, mac);
         }
         
         if (options.stream) {
-            const stream = await testStream(portal, token);
+            const stream = await testStream(portal, mac);
             result.stream_ok = stream.ok;
             result.stream_url = stream.url;
         }
@@ -1015,6 +1016,11 @@ async function runTest() {
         return;
     }
     
+    // Reset session data
+    for (const key in sessionData) {
+        delete sessionData[key];
+    }
+    
     document.getElementById('resultContainer').innerHTML = '';
     clearLog();
     
@@ -1123,6 +1129,11 @@ function clearAll() {
         isRunning = false;
         document.getElementById('btnRun').disabled = false;
         document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
+    }
+    
+    // Clear session data
+    for (const key in sessionData) {
+        delete sessionData[key];
     }
     
     document.getElementById('portalUrl').value = '';
