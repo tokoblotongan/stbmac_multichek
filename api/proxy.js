@@ -1,10 +1,9 @@
 // ============================================================
 //  API PROXY - Vercel Serverless Function
-//  DENGAN SESSION MANAGEMENT (seperti Python requests.Session)
+//  Dengan retry mechanism dan timeout handling
 // ============================================================
 
 // Store sessions per MAC
-// NOTE: Ini menggunakan memory, untuk production gunakan Redis
 const sessionStore = new Map();
 
 export default async function handler(req, res) {
@@ -18,7 +17,7 @@ export default async function handler(req, res) {
     }
     
     try {
-        const { url, mac } = req.query;
+        const { url, mac, token, cookie } = req.query;
         
         if (!url) {
             return res.status(400).json({
@@ -30,11 +29,10 @@ export default async function handler(req, res) {
         const targetUrl = decodeURIComponent(url);
         
         // ==========================================================
-        //  SESSION MANAGEMENT (seperti Python requests.Session)
+        //  SESSION MANAGEMENT
         // ==========================================================
         const sessionKey = mac || 'default';
         
-        // Ambil atau buat session untuk MAC ini
         if (!sessionStore.has(sessionKey)) {
             sessionStore.set(sessionKey, {
                 cookies: {},
@@ -46,12 +44,7 @@ export default async function handler(req, res) {
         const session = sessionStore.get(sessionKey);
         
         // ==========================================================
-        //  DETEKSI TOKEN DARI RESPONSE (untuk disimpan)
-        // ==========================================================
-        // Jika ini adalah request handshake, kita akan simpan token dari response
-        
-        // ==========================================================
-        //  BUILD HEADERS (seperti Python)
+        //  BUILD HEADERS
         // ==========================================================
         const headers = {
             'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
@@ -63,31 +56,30 @@ export default async function handler(req, res) {
         };
         
         // ==========================================================
-        //  TAMBAHKAN COOKIE DARI SESSION (seperti Python)
+        //  TAMBAHKAN COOKIE
         // ==========================================================
-        if (mac) {
-            // Cookie dasar (seperti di Python make_session)
+        if (cookie) {
+            headers['Cookie'] = decodeURIComponent(cookie);
+        } else if (mac) {
             const baseCookies = {
                 'mac': mac,
                 'stb_lang': 'en',
                 'timezone': 'Europe/Amsterdam'
             };
-            
-            // Gabungkan dengan cookie yang tersimpan di session
             const allCookies = { ...baseCookies, ...session.cookies };
-            
-            // Convert ke string
             const cookieString = Object.entries(allCookies)
                 .map(([key, value]) => `${key}=${value}`)
                 .join('; ');
-            
             headers['Cookie'] = cookieString;
         }
         
         // ==========================================================
-        //  TAMBAHKAN TOKEN KE HEADER (seperti Python)
+        //  TAMBAHKAN TOKEN
         // ==========================================================
-        // Jika session punya token, tambahkan ke header
+        if (token) {
+            session.token = token;
+        }
+        
         if (session.token) {
             headers['Authorization'] = `Bearer ${session.token}`;
         }
@@ -105,26 +97,61 @@ export default async function handler(req, res) {
         console.log('================================================');
         
         // ==========================================================
-        //  FETCH
+        //  FETCH DENGAN RETRY
         // ==========================================================
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        let lastError = null;
+        let retries = 3;
+        let response = null;
         
-        const response = await fetch(targetUrl, {
-            method: req.method || 'GET',
-            headers: headers,
-            signal: controller.signal,
-            redirect: 'follow'
-        });
+        while (retries > 0) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                
+                response = await fetch(targetUrl, {
+                    method: req.method || 'GET',
+                    headers: headers,
+                    signal: controller.signal,
+                    redirect: 'follow'
+                });
+                
+                clearTimeout(timeoutId);
+                
+                // Jika berhasil, keluar dari loop
+                if (response.ok || response.status === 206 || response.status === 302 || response.status === 301) {
+                    break;
+                }
+                
+                // Jika status 5xx, retry
+                if (response.status >= 500) {
+                    console.log(`🔄 Retry ${retries-1} left, status: ${response.status}`);
+                    retries--;
+                    if (retries === 0) break;
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    continue;
+                }
+                
+                // Status lain, keluar
+                break;
+                
+            } catch (error) {
+                lastError = error;
+                console.log(`🔄 Retry ${retries-1} left, error: ${error.message}`);
+                retries--;
+                if (retries === 0) throw error;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
         
-        clearTimeout(timeoutId);
+        if (!response) {
+            throw new Error('No response after retries');
+        }
         
         // ==========================================================
-        //  SIMPAN COOKIE DARI RESPONSE (seperti Python)
+        //  SIMPAN COOKIE DARI RESPONSE
         // ==========================================================
         const setCookie = response.headers.get('set-cookie');
         if (setCookie) {
-            // Parse set-cookie header
             const cookieParts = setCookie.split(';');
             const nameValue = cookieParts[0].trim();
             if (nameValue.includes('=')) {
@@ -134,25 +161,23 @@ export default async function handler(req, res) {
         }
         
         // ==========================================================
-        //  SIMPAN TOKEN DARI RESPONSE (jika handshake)
+        //  SIMPAN TOKEN DARI RESPONSE
         // ==========================================================
         const data = await response.text();
         
-        // Coba parse JSON untuk ambil token
         try {
             const jsonData = JSON.parse(data);
-            let token = null;
+            let tokenFound = null;
             
-            // Cek berbagai format token
             if (jsonData?.js?.token) {
-                token = jsonData.js.token;
+                tokenFound = jsonData.js.token;
             } else if (jsonData?.token) {
-                token = jsonData.token;
+                tokenFound = jsonData.token;
             }
             
-            if (token) {
-                session.token = token;
-                console.log('🔑 TOKEN SAVED:', token.substring(0, 20) + '...');
+            if (tokenFound) {
+                session.token = tokenFound;
+                console.log('🔑 TOKEN SAVED:', tokenFound.substring(0, 20) + '...');
             }
         } catch (e) {
             // Bukan JSON atau tidak ada token
@@ -178,7 +203,7 @@ export default async function handler(req, res) {
         if (error.name === 'AbortError') {
             return res.status(504).json({
                 success: false,
-                error: 'Request timeout (15s)'
+                error: 'Request timeout (30s)'
             });
         }
         
