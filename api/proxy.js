@@ -1,10 +1,7 @@
 // ============================================================
 //  API PROXY - Vercel Serverless Function
-//  Dengan retry mechanism dan timeout handling
+//  STATELESS - Semua data dikirim dari client
 // ============================================================
-
-// Store sessions per MAC
-const sessionStore = new Map();
 
 export default async function handler(req, res) {
     // CORS HEADERS
@@ -29,59 +26,32 @@ export default async function handler(req, res) {
         const targetUrl = decodeURIComponent(url);
         
         // ==========================================================
-        //  SESSION MANAGEMENT
-        // ==========================================================
-        const sessionKey = mac || 'default';
-        
-        if (!sessionStore.has(sessionKey)) {
-            sessionStore.set(sessionKey, {
-                cookies: {},
-                headers: {},
-                token: null
-            });
-        }
-        
-        const session = sessionStore.get(sessionKey);
-        
-        // ==========================================================
-        //  BUILD HEADERS
+        //  BUILD HEADERS - SEMUA DARI CLIENT
         // ==========================================================
         const headers = {
             'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
             'X-Requested-With': 'XMLHttpRequest',
-            'Accept': '*/*',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
-            'Referer': targetUrl.replace(/portal\.php.*$/, 'portal.php')
+            'Referer': targetUrl.replace(/portal\.php.*$/, 'c/')
         };
         
         // ==========================================================
-        //  TAMBAHKAN COOKIE
+        //  COOKIE DARI CLIENT
         // ==========================================================
         if (cookie) {
             headers['Cookie'] = decodeURIComponent(cookie);
         } else if (mac) {
-            const baseCookies = {
-                'mac': mac,
-                'stb_lang': 'en',
-                'timezone': 'Europe/Amsterdam'
-            };
-            const allCookies = { ...baseCookies, ...session.cookies };
-            const cookieString = Object.entries(allCookies)
-                .map(([key, value]) => `${key}=${value}`)
-                .join('; ');
-            headers['Cookie'] = cookieString;
+            headers['Cookie'] = `mac=${mac}; stb_lang=en; timezone=Europe%2FAmsterdam`;
         }
         
         // ==========================================================
-        //  TAMBAHKAN TOKEN
+        //  TOKEN DARI CLIENT
         // ==========================================================
-        if (token) {
-            session.token = token;
-        }
-        
-        if (session.token) {
-            headers['Authorization'] = `Bearer ${session.token}`;
+        if (token && token !== 'authenticated') {
+            headers['Authorization'] = `Bearer ${decodeURIComponent(token)}`;
         }
         
         // ==========================================================
@@ -91,101 +61,49 @@ export default async function handler(req, res) {
         console.log('📤 PROXY REQUEST');
         console.log('TARGET :', targetUrl);
         console.log('MAC    :', mac || '(none)');
-        console.log('TOKEN  :', session.token ? `${session.token.substring(0, 20)}...` : '(none)');
-        console.log('COOKIE :', headers['Cookie'] || '(none)');
+        console.log('TOKEN  :', token ? `${token.substring(0, 20)}...` : '(none)');
+        console.log('COOKIE :', headers['Cookie'] ? headers['Cookie'].substring(0, 60) + '...' : '(none)');
         console.log('AUTH   :', headers['Authorization'] ? 'Bearer ***' : '(none)');
         console.log('================================================');
         
         // ==========================================================
-        //  FETCH DENGAN RETRY
+        //  FETCH DENGAN TIMEOUT 25 DETIK
         // ==========================================================
-        let lastError = null;
-        let retries = 3;
-        let response = null;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
         
-        while (retries > 0) {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
-                
-                response = await fetch(targetUrl, {
-                    method: req.method || 'GET',
-                    headers: headers,
-                    signal: controller.signal,
-                    redirect: 'follow'
-                });
-                
-                clearTimeout(timeoutId);
-                
-                // Jika berhasil, keluar dari loop
-                if (response.ok || response.status === 206 || response.status === 302 || response.status === 301) {
-                    break;
-                }
-                
-                // Jika status 5xx, retry
-                if (response.status >= 500) {
-                    console.log(`🔄 Retry ${retries-1} left, status: ${response.status}`);
-                    retries--;
-                    if (retries === 0) break;
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    continue;
-                }
-                
-                // Status lain, keluar
-                break;
-                
-            } catch (error) {
-                lastError = error;
-                console.log(`🔄 Retry ${retries-1} left, error: ${error.message}`);
-                retries--;
-                if (retries === 0) throw error;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
+        const response = await fetch(targetUrl, {
+            method: req.method || 'GET',
+            headers: headers,
+            signal: controller.signal,
+            redirect: 'follow'
+        });
         
-        if (!response) {
-            throw new Error('No response after retries');
-        }
+        clearTimeout(timeoutId);
         
         // ==========================================================
-        //  SIMPAN COOKIE DARI RESPONSE
+        //  SIMPAN COOKIE RESPONSE UNTUK CLIENT
         // ==========================================================
         const setCookie = response.headers.get('set-cookie');
         if (setCookie) {
-            const cookieParts = setCookie.split(';');
-            const nameValue = cookieParts[0].trim();
-            if (nameValue.includes('=')) {
-                const [key, value] = nameValue.split('=');
-                session.cookies[key.trim()] = value.trim();
-            }
-        }
-        
-        // ==========================================================
-        //  SIMPAN TOKEN DARI RESPONSE
-        // ==========================================================
-        const data = await response.text();
-        
-        try {
-            const jsonData = JSON.parse(data);
-            let tokenFound = null;
-            
-            if (jsonData?.js?.token) {
-                tokenFound = jsonData.js.token;
-            } else if (jsonData?.token) {
-                tokenFound = jsonData.token;
-            }
-            
-            if (tokenFound) {
-                session.token = tokenFound;
-                console.log('🔑 TOKEN SAVED:', tokenFound.substring(0, 20) + '...');
-            }
-        } catch (e) {
-            // Bukan JSON atau tidak ada token
+            res.setHeader('X-Set-Cookie', setCookie);
         }
         
         // ==========================================================
         //  RESPONSE
         // ==========================================================
+        const data = await response.text();
+        
+        // Log token dari response
+        try {
+            const json = JSON.parse(data);
+            if (json?.js?.token) {
+                console.log('🔑 TOKEN FOUND in response:', json.js.token.substring(0, 20) + '...');
+            }
+        } catch (e) {
+            // Bukan JSON
+        }
+        
         console.log('📥 RESPONSE STATUS:', response.status);
         console.log('📥 RESPONSE LEN :', data.length);
         console.log('================================================');
@@ -203,7 +121,7 @@ export default async function handler(req, res) {
         if (error.name === 'AbortError') {
             return res.status(504).json({
                 success: false,
-                error: 'Request timeout (30s)'
+                error: 'Request timeout (25s)'
             });
         }
         
