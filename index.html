@@ -340,9 +340,9 @@
 
         <div class="slider-container">
             <label style="margin:0; font-weight:400; color:#cbd5e1;">Paralel:</label>
-            <input type="range" id="parallelSlider" min="1" max="10" value="5">
-            <span class="slider-value" id="parallelValue">5</span>
-            <span style="font-size:11px; color:#6b7280;">MAC yang ditest bersamaan</span>
+            <input type="range" id="parallelSlider" min="1" max="5" value="2">
+            <span class="slider-value" id="parallelValue">2</span>
+            <span style="font-size:11px; color:#6b7280;">Rekomendasi: 1-3 untuk Stalker</span>
         </div>
 
         <hr class="separator">
@@ -376,7 +376,7 @@
 
 <script>
 // ============================================================
-//  KONFIGURASI - Proxy Vercel Sendiri
+//  KONFIGURASI
 // ============================================================
 const PROXY = '/api/proxy?url=';
 
@@ -489,7 +489,7 @@ function getMACs() {
 }
 
 // ============================================================
-//  PROXY REQUEST
+//  PROXY REQUEST - Kirim semua data dari browser
 // ============================================================
 async function proxyRequest(url, options = {}) {
     const params = new URLSearchParams();
@@ -544,13 +544,22 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const mac = session.mac || '';
     const data = sessionData[mac] || {};
     
+    // Build cookie string yang lengkap
+    let cookieStr = `mac=${mac}; stb_lang=en; timezone=Europe%2FAmsterdam`;
+    if (data.cookie) {
+        cookieStr = data.cookie;
+    }
+    
     return await proxyRequest(url.toString(), {
         mac: mac,
-        token: data.token,
-        cookie: data.cookie
+        token: data.token || '',
+        cookie: cookieStr
     });
 }
 
+// ============================================================
+//  DO HANDSHAKE
+// ============================================================
 async function doHandshake(portal, mac) {
     try {
         const result = await stalkerRequest(portal, 
@@ -559,26 +568,29 @@ async function doHandshake(portal, mac) {
             { mac: mac }
         );
         
+        console.log('🤝 HANDSHAKE RAW:', JSON.stringify(result).substring(0, 300));
+        
         let token = null;
+        let cookieStr = `mac=${mac}; stb_lang=en; timezone=Europe%2FAmsterdam`;
+        
         if (result.js && result.js.token) {
             token = result.js.token;
         } else if (result.token) {
             token = result.token;
-        } else if (result.js && result.js.auth === 1) {
-            token = 'authenticated';
         }
         
         if (token) {
             sessionData[mac] = {
                 token: token,
-                cookie: `mac=${mac}; stb_lang=en; timezone=Europe/Amsterdam`
+                cookie: cookieStr
             };
             console.log(`🔑 Token saved for ${mac}:`, token.substring(0, 20) + '...');
             return token;
         }
         
-        console.log('Handshake response:', result);
+        console.log('⚠️ No token in handshake response');
         return null;
+        
     } catch (error) {
         addLog(`Handshake failed for ${mac}: ${error.message}`, 'error');
         return null;
@@ -590,16 +602,10 @@ async function doHandshake(portal, mac) {
 // ============================================================
 async function getProfile(portal, mac) {
     try {
-        // ==========================================================
-        //  COBA SEMUA ENDPOINT YANG MUNGKIN
-        // ==========================================================
-        
+        // Endpoint yang benar untuk Stalker/MAG
         const endpoints = [
             { type: 'account_info', action: 'get_main_info' },
             { type: 'stb', action: 'get_profile' },
-            { type: 'account', action: 'info' },
-            { type: 'user', action: 'get_info' },
-            { type: 'subscriber', action: 'get_info' },
             { type: 'account_info', action: 'get_user_info' }
         ];
         
@@ -607,96 +613,79 @@ async function getProfile(portal, mac) {
         
         for (const endpoint of endpoints) {
             try {
-                const result = await stalkerRequest(portal,
-                    endpoint,
-                    {},
-                    { mac: mac }
-                );
+                const result = await stalkerRequest(portal, endpoint, {}, { mac: mac });
                 
                 if (result && Object.keys(result).length > 0) {
                     allResults.push({ endpoint, result });
-                    console.log(`👤 Endpoint ${endpoint.type}/${endpoint.action}:`, result);
+                    console.log(`👤 [${endpoint.type}/${endpoint.action}] RAW:`, JSON.stringify(result).substring(0, 200));
                 }
             } catch (e) {
-                // Skip error
+                console.log(`👤 [${endpoint.type}] Error:`, e.message);
             }
         }
         
-        // ==========================================================
-        //  GABUNGKAN SEMUA HASIL
-        // ==========================================================
+        // Parse response - cari di semua level
         let combined = {};
         
         for (const item of allResults) {
             const data = item.result;
             
-            // Jika js adalah string, parse dulu
-            let js = data?.js || data || {};
-            if (typeof js === 'string') {
-                try {
-                    js = JSON.parse(js);
-                } catch (e) {
-                    js = {};
+            if (data.js) {
+                if (typeof data.js === 'string') {
+                    try { combined = { ...combined, ...JSON.parse(data.js) }; } catch(e) {}
+                } else if (typeof data.js === 'object') {
+                    combined = { ...combined, ...data.js };
                 }
             }
             
-            // Gabungkan
-            combined = { ...combined, ...js };
-        }
-        
-        console.log("👤 COMBINED PROFILE:", combined);
-        
-        // ==========================================================
-        //  EKSTRAK DATA DARI SEMUA FORMAT
-        // ==========================================================
-        
-        // Nama - coba semua kemungkinan
-        const nameFields = ['fname', 'first_name', 'name', 'login', 'username', 'user', 
-                           'full_name', 'display_name', 'nickname', 'account_name'];
-        let name = '';
-        for (const field of nameFields) {
-            if (combined[field]) {
-                name = combined[field];
-                break;
+            if (typeof data === 'object' && data !== null) {
+                combined = { ...combined, ...data };
             }
         }
-        // Jika ada first + last
+        
+        console.log("👤 COMBINED:", combined);
+        
+        // Extract NAMA
+        const nameFields = ['fname', 'first_name', 'name', 'login', 'username', 
+                           'full_name', 'display_name', 'nickname', 'user'];
+        let name = '';
+        for (const f of nameFields) {
+            if (combined[f]) { name = combined[f]; break; }
+        }
         if (combined.fname && combined.lname) {
-            name = `${combined.fname} ${combined.lname}`;
-        } else if (combined.first_name && combined.last_name) {
-            name = `${combined.first_name} ${combined.last_name}`;
+            name = `${combined.fname} ${combined.lname}`.trim();
         }
         
-        // Expired - coba semua kemungkinan
+        // Extract EXPIRED
         const expireFields = ['end_date', 'expire_date', 'expires', 'expiration', 
                              'valid_until', 'valid_till', 'expiry', 'expire', 
-                             'account_expiry', 'sub_expiry', 'end', 'until'];
+                             'account_expiry', 'sub_expiry', 'end', 'until',
+                             'trial_end', 'subscription_end', 'paid_to'];
         let expire = '';
-        for (const field of expireFields) {
-            if (combined[field]) {
-                expire = combined[field];
-                break;
-            }
+        for (const f of expireFields) {
+            if (combined[f]) { expire = combined[f]; break; }
         }
         
-        // Status - coba semua kemungkinan
+        // Format tanggal Stalker biasanya timestamp
+        if (expire && !isNaN(Number(expire)) && String(expire).length === 10) {
+            expire = new Date(Number(expire) * 1000).toISOString().split('T')[0];
+        }
+        
+        // Extract STATUS
         const statusFields = ['status', 'account_status', 'state', 'is_active', 
-                             'active', 'enabled', 'verified'];
+                             'active', 'enabled', 'verified', 'blocked'];
         let status = '';
-        for (const field of statusFields) {
-            if (combined[field] !== undefined && combined[field] !== null) {
-                status = String(combined[field]);
+        for (const f of statusFields) {
+            if (combined[f] !== undefined && combined[f] !== null) {
+                status = String(combined[f]);
                 break;
             }
         }
+        if (status === 'true' || status === '1') status = 'Active';
+        if (status === 'false' || status === '0') status = 'Inactive';
+        if (combined.blocked === 1 || combined.blocked === true) status = 'Blocked';
         
-        // Jika status adalah boolean
-        if (status === 'true' || status === '1') status = 'active';
-        if (status === 'false' || status === '0') status = 'inactive';
-        
-        console.log("👤 EXTRACTED - Name:", name || '(empty)');
-        console.log("👤 EXTRACTED - Expire:", expire || '(empty)');
-        console.log("👤 EXTRACTED - Status:", status || '(empty)');
+        console.log(`👤 EXTRACTED → Name:"${name}" | Expire:"${expire}" | Status:"${status}"`);
         
         return { name, expire, status };
         
@@ -864,14 +853,8 @@ async function testStream(portal, mac) {
         
         console.log("🎬 Stream URL found:", streamUrl);
         
-        // ==========================================================
-        //  TEST STREAM VIA PROXY (BYPASS CORS)
-        // ==========================================================
-        
-        // Strategy 1: Test via proxy dengan GET + Range
+        // Test stream via proxy
         try {
-            console.log("🔄 Testing stream via proxy (GET + Range)...");
-            
             const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
             
             const controller = new AbortController();
@@ -891,117 +874,17 @@ async function testStream(portal, mac) {
             clearTimeout(timeoutId);
             
             const ok = testResponse.status === 206 || testResponse.ok;
-            console.log("🎬 Stream proxy GET test:", ok ? '✅ OK' : '❌ FAILED', 'Status:', testResponse.status);
+            console.log("🎬 Stream test:", ok ? '✅ OK' : '❌ FAILED', 'Status:', testResponse.status);
             
-            if (ok) {
-                return { ok: true, url: streamUrl };
-            }
-        } catch (proxyError) {
-            console.log("Proxy GET failed:", proxyError.message);
+            return { ok: ok, url: streamUrl };
+            
+        } catch (error) {
+            console.log("Stream test error:", error.message);
+            return { ok: false, url: streamUrl };
         }
-        
-        // Strategy 2: Test via proxy dengan HEAD
-        try {
-            console.log("🔄 Testing stream via proxy (HEAD)...");
-            
-            const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
-            
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-            
-            const testResponse = await fetch(proxyTestUrl, {
-                method: 'HEAD',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
-                    'Accept': '*/*'
-                },
-                signal: controller.signal,
-                credentials: 'omit'
-            });
-            
-            clearTimeout(timeoutId);
-            
-            const ok = testResponse.status === 206 || testResponse.ok;
-            console.log("🎬 Stream proxy HEAD test:", ok ? '✅ OK' : '❌ FAILED', 'Status:', testResponse.status);
-            
-            if (ok) {
-                return { ok: true, url: streamUrl };
-            }
-        } catch (headError) {
-            console.log("Proxy HEAD failed:", headError.message);
-        }
-        
-        // Strategy 3: Coba HTTPS (jika URL HTTP)
-        if (streamUrl.startsWith('http://')) {
-            const httpsUrl = streamUrl.replace('http://', 'https://');
-            console.log("🔄 Trying HTTPS version:", httpsUrl);
-            
-            try {
-                const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(httpsUrl)}&mac=${mac}`;
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-                
-                const testResponse = await fetch(proxyTestUrl, {
-                    method: 'HEAD',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
-                        'Accept': '*/*'
-                    },
-                    signal: controller.signal,
-                    credentials: 'omit'
-                });
-                
-                clearTimeout(timeoutId);
-                const ok = testResponse.status === 206 || testResponse.ok;
-                console.log("🎬 HTTPS via proxy:", ok ? '✅ OK' : '❌ FAILED');
-                
-                if (ok) {
-                    return { ok: true, url: httpsUrl };
-                }
-            } catch (e) {
-                console.log("HTTPS via proxy failed:", e.message);
-            }
-        }
-        
-        // Strategy 4: Coba tanpa Range (langsung GET)
-        try {
-            console.log("🔄 Testing stream via proxy (GET without Range)...");
-            
-            const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
-            
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-            
-            const testResponse = await fetch(proxyTestUrl, {
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
-                    'Accept': '*/*'
-                },
-                signal: controller.signal,
-                credentials: 'omit'
-            });
-            
-            clearTimeout(timeoutId);
-            const ok = testResponse.ok;
-            console.log("🎬 Stream GET (no range):", ok ? '✅ OK' : '❌ FAILED', 'Status:', testResponse.status);
-            
-            if (ok) {
-                return { ok: true, url: streamUrl };
-            }
-        } catch (getError) {
-            console.log("GET (no range) failed:", getError.message);
-        }
-        
-        // ==========================================================
-        //  SEMUA STRATEGI GAGAL - MARK SEBAGAI OK
-        // ==========================================================
-        console.log("⚠️ All stream tests failed, but marking as OK (stream URL exists)");
-        return { ok: true, url: streamUrl };
         
     } catch (error) {
-        console.error('❌ TestStream error:', error);
+        console.error('TestStream error:', error);
         return { ok: false, url: '' };
     }
 }
@@ -1027,29 +910,41 @@ async function testOneMAC(portal, mac, index, options) {
     
     try {
         const startTime = performance.now();
-        const token = await doHandshake(portal, mac);
-        const ping = Math.round(performance.now() - startTime);
         
-        result.ping_ms = ping;
-        result.token = token ? token.substring(0, 16) + '...' : '(no token)';
-        result.online = !!token;
+        // STEP 1: HANDSHAKE (WAJIB SUKSES DULU)
+        const token = await doHandshake(portal, mac);
+        result.ping_ms = Math.round(performance.now() - startTime);
         
         if (!token) {
-            result.error = 'Handshake failed - token not received';
+            result.error = 'Handshake failed - no token';
+            result.online = false;
             return result;
         }
         
+        result.token = token.substring(0, 16) + '...';
+        result.online = true;
+        
+        // Tunggu sebentar agar sessionData tersimpan
+        await new Promise(r => setTimeout(r, 100));
+        
+        // STEP 2: GET PROFILE (PAKAI TOKEN)
         if (options.profile) {
             const profile = await getProfile(portal, mac);
             result.name = profile.name;
             result.expire = profile.expire;
             result.acc_status = profile.status;
+            
+            if (!profile.name && !profile.expire) {
+                console.log(`⚠️ Profile kosong untuk ${mac}, mungkin token invalid atau endpoint salah`);
+            }
         }
         
+        // STEP 3: COUNT CHANNELS
         if (options.channels) {
             result.channels = await countChannels(portal, mac);
         }
         
+        // STEP 4: TEST STREAM
         if (options.stream) {
             const stream = await testStream(portal, mac);
             result.stream_ok = stream.ok;
@@ -1057,7 +952,7 @@ async function testOneMAC(portal, mac, index, options) {
         }
         
     } catch (error) {
-        result.error = error.message.substring(0, 80);
+        result.error = error.message.substring(0, 100);
         result.online = false;
     }
     
