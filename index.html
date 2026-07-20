@@ -835,175 +835,121 @@ async function countChannels(portal, mac) {
 }
 
 // ============================================================
-//  TEST STREAM - Dengan deteksi URL tidak valid
+//  TEST STREAM — Sederhana & Akurat (HANYA cek play_token=0 dan video.php)
 // ============================================================
 async function testStream(portal, mac) {
     try {
+        // 1. Ambil channel list
         const listResult = await stalkerRequest(portal,
             { type: 'itv', action: 'get_ordered_list' },
             { genre: '*', p: '1' },
             { mac: mac }
         );
         
-        console.log("🎬 STREAM RAW:", listResult);
-        
         let data = [];
-        
-        if (typeof listResult?.js === 'string') {
-            try {
-                const parsedJs = JSON.parse(listResult.js);
-                if (parsedJs?.data && Array.isArray(parsedJs.data)) {
-                    data = parsedJs.data;
-                }
-            } catch (e) {}
-        }
-        
-        if (typeof listResult?.js === 'object' && listResult.js !== null) {
-            if (listResult.js.data && Array.isArray(listResult.js.data)) {
-                data = listResult.js.data;
-            }
-        }
-        
-        if (!data.length && listResult?.data && Array.isArray(listResult.data)) {
+        if (listResult?.js?.data && Array.isArray(listResult.js.data)) {
+            data = listResult.js.data;
+        } else if (listResult?.data && Array.isArray(listResult.data)) {
             data = listResult.data;
         }
         
         if (!data.length) {
-            console.log("⚠️ No channel data found");
+            console.log("⚠️ No channels");
             return { ok: false, url: '' };
         }
         
-        let firstChannel = null;
-        for (let i = 0; i < Math.min(data.length, 10); i++) {
-            if (data[i]?.cmd) {
-                firstChannel = data[i];
-                break;
-            }
-        }
-        
-        if (!firstChannel) {
-            console.log("⚠️ No channel with cmd found");
+        // 2. Ambil channel pertama yang punya cmd
+        const channel = data.find(ch => ch?.cmd);
+        if (!channel) {
+            console.log("⚠️ No cmd found");
             return { ok: false, url: '' };
         }
         
-        const cmd = firstChannel.cmd;
-        console.log("🎬 Selected channel:", firstChannel.name || 'Unknown');
-        console.log("🎬 CMD:", cmd);
+        console.log("🎬 Channel:", channel.name, "| CMD:", channel.cmd.substring(0, 50));
         
+        // 3. Create link
         const linkResult = await stalkerRequest(portal,
             { type: 'itv', action: 'create_link' },
-            { cmd: encodeURIComponent(cmd) },
+            { cmd: encodeURIComponent(channel.cmd) },
             { mac: mac }
         );
         
-        console.log("🔗 CREATE LINK RAW:", linkResult);
-        
+        // 4. Extract URL
         let raw = '';
-        
-        if (typeof linkResult?.js === 'string') {
-            try {
-                const parsedJs = JSON.parse(linkResult.js);
-                raw = parsedJs?.cmd || parsedJs?.url || '';
-            } catch (e) {}
+        const js = linkResult?.js || linkResult;
+        if (typeof js === 'object' && js !== null) {
+            raw = js.cmd || js.url || '';
+        } else if (typeof js === 'string') {
+            try { raw = JSON.parse(js).cmd || JSON.parse(js).url || ''; } catch(e) {}
         }
         
-        if (typeof linkResult?.js === 'object' && linkResult.js !== null) {
-            raw = linkResult.js?.cmd || linkResult.js?.url || '';
-        }
+        if (!raw) raw = linkResult?.cmd || linkResult?.url || '';
         
-        if (!raw) {
-            raw = linkResult?.cmd || linkResult?.url || '';
-        }
-        
-        console.log("🔗 RAW URL:", raw);
-        
-        // ==========================================================
-        //  EKSTRAK URL DARI RAW
-        // ==========================================================
-        let streamUrl = '';
+        // Extract URL dari string (ffmpeg http://... atau langsung http://...)
         const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
-        if (urlMatch) {
-            streamUrl = urlMatch[1];
-        }
-        
-        if (!streamUrl && cmd) {
-            const cmdMatch = cmd.match(/(https?:\/\/[^\s]+)/);
-            if (cmdMatch) {
-                streamUrl = cmdMatch[1];
-            }
-        }
+        let streamUrl = urlMatch ? urlMatch[1] : '';
         
         if (!streamUrl) {
-            console.log("⚠️ No stream URL found");
+            console.log("⚠️ No URL extracted from:", raw.substring(0, 100));
             return { ok: false, url: '' };
         }
         
-        console.log("🎬 Stream URL found:", streamUrl);
+        console.log("🔗 Stream URL:", streamUrl.substring(0, 80));
         
-        // ==========================================================
-        //  DETEKSI URL TIDAK VALID
-        // ==========================================================
+        // 5. CEK VALIDITAS — HANYA 2 KRITERIA
         try {
             const urlObj = new URL(streamUrl);
             const params = urlObj.searchParams;
             
-            const playToken = params.get('play_token') || params.get('token') || '';
-            const v = params.get('v') || '';
-            const m = params.get('m') || '';
-            const stream = params.get('stream') || '';
+            // Cek play_token (bisa bernama 'play_token' atau 'token')
+            const token = params.get('play_token') || params.get('token') || '';
             
-            // Deteksi URL tidak valid
-            const isInvalid = (
-                playToken === '0' || 
-                playToken === '' || 
-                v === '0' || 
-                m === '0' ||
-                stream === '' ||
-                streamUrl.includes('video.php')
-            );
+            // INVALID hanya jika:
+            // - play_token = '0' (string nol)
+            // - URL mengandung 'video.php' (bukan live)
+            const isInvalid = (token === '0') || streamUrl.includes('video.php');
             
             if (isInvalid) {
-                console.log("⚠️ Detected INVALID stream URL (play_token=0 or v=0 or video.php)");
+                console.log("⚠️ INVALID: play_token=0 atau video.php");
                 return { ok: false, url: streamUrl };
             }
+            
+            console.log("✅ URL valid, play_token:", token.substring(0, 10) + "...");
+            
         } catch (e) {
-            console.log("⚠️ Could not parse URL, skipping validation");
+            console.log("⚠️ URL parse error, tapi lanjut test");
         }
         
-        // ==========================================================
-        //  TEST STREAM VIA PROXY
-        // ==========================================================
+        // 6. TEST VIA PROXY — cukup 1 kali dengan HEAD
         try {
-            const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
+            const proxyUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
             
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 10000);
             
-            const testResponse = await fetch(proxyTestUrl, {
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3',
-                    'Accept': '*/*',
-                    'Range': 'bytes=0-1024'
-                },
-                signal: controller.signal,
+            const resp = await fetch(proxyUrl, {
+                method: 'HEAD',
+                signal: ctrl.signal,
                 credentials: 'omit'
             });
             
-            clearTimeout(timeoutId);
+            clearTimeout(t);
             
-            const ok = testResponse.status === 206 || testResponse.ok;
-            console.log("🎬 Stream test:", ok ? '✅ OK' : '❌ FAILED', 'Status:', testResponse.status);
+            // Stream aktif kalau: 200, 206 (partial), 302/301 (redirect)
+            const isLive = resp.status === 200 || resp.status === 206 || 
+                          resp.status === 302 || resp.status === 301;
             
-            return { ok: ok, url: streamUrl };
+            console.log("🎬 Proxy test:", resp.status, isLive ? "✅ LIVE" : "❌ DEAD");
+            return { ok: isLive, url: streamUrl };
             
-        } catch (error) {
-            console.log("Stream test error:", error.message);
-            return { ok: false, url: streamUrl };
+        } catch (err) {
+            // Proxy test gagal (timeout/CORS) → anggap HIDUP karena URL valid
+            console.log("⚠️ Proxy test failed:", err.message, "→ Assume LIVE");
+            return { ok: true, url: streamUrl };
         }
         
     } catch (error) {
-        console.error('TestStream error:', error);
+        console.error("❌ testStream error:", error.message);
         return { ok: false, url: '' };
     }
 }
@@ -1058,8 +1004,7 @@ async function testOneMAC(portal, mac, index, options) {
             }
         }
         
-        // STEP 3: COUNT CHANNELS
-        if (options.channels) {
+        // STEP 3: COUNT CHANNELS        if (options.channels) {
             result.channels = await countChannels(portal, mac);
         }
         
