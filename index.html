@@ -598,100 +598,184 @@ async function doHandshake(portal, mac) {
 }
 
 // ============================================================
-//  GET PROFILE - Coba semua endpoint
+//  GET PROFILE - Dengan debug log lengkap
 // ============================================================
 async function getProfile(portal, mac) {
     try {
-        // Endpoint yang benar untuk Stalker/MAG
-        const endpoints = [
+        // Test endpoint utama
+        const result = await stalkerRequest(portal,
             { type: 'account_info', action: 'get_main_info' },
-            { type: 'stb', action: 'get_profile' },
-            { type: 'account_info', action: 'get_user_info' }
-        ];
+            {},
+            { mac: mac }
+        );
         
-        let allResults = [];
+        // ==========================================================
+        //  🔍 DEBUG LOG LENGKAP
+        // ==========================================================
+        console.log("🔍 ===== PROFILE RESPONSE =====");
+        console.log("🔍 RAW:", JSON.stringify(result, null, 2));
         
-        for (const endpoint of endpoints) {
-            try {
-                const result = await stalkerRequest(portal, endpoint, {}, { mac: mac });
-                
-                if (result && Object.keys(result).length > 0) {
-                    allResults.push({ endpoint, result });
-                    console.log(`👤 [${endpoint.type}/${endpoint.action}] RAW:`, JSON.stringify(result).substring(0, 200));
-                }
-            } catch (e) {
-                console.log(`👤 [${endpoint.type}] Error:`, e.message);
+        // Cek apakah response punya js
+        if (!result) {
+            console.log("⚠️ Response kosong!");
+            return { name: '', expire: '—', status: '' };
+        }
+        
+        let js = result.js || result || {};
+        if (typeof js === 'string') {
+            try { 
+                js = JSON.parse(js); 
+                console.log("🔍 Parsed js string:", js);
+            } catch(e) {
+                console.log("⚠️ js adalah string tapi bukan JSON valid");
+                return { name: '', expire: '—', status: '' };
             }
         }
         
-        // Parse response - cari di semua level
-        let combined = {};
+        console.log("🔍 ALL KEYS:", Object.keys(js));
+        console.log("🔍 ============================");
         
-        for (const item of allResults) {
-            const data = item.result;
-            
-            if (data.js) {
-                if (typeof data.js === 'string') {
-                    try { combined = { ...combined, ...JSON.parse(data.js) }; } catch(e) {}
-                } else if (typeof data.js === 'object') {
-                    combined = { ...combined, ...data.js };
-                }
-            }
-            
-            if (typeof data === 'object' && data !== null) {
-                combined = { ...combined, ...data };
-            }
-        }
-        
-        console.log("👤 COMBINED:", combined);
-        
-        // Extract NAMA
+        // ==========================================================
+        //  EXTRACT NAMA
+        // ==========================================================
         const nameFields = ['fname', 'first_name', 'name', 'login', 'username', 
-                           'full_name', 'display_name', 'nickname', 'user'];
+                           'full_name', 'display_name', 'nickname', 'user',
+                           'account_name', 'subscriber_name'];
         let name = '';
         for (const f of nameFields) {
-            if (combined[f]) { name = combined[f]; break; }
+            if (js[f] && js[f] !== '') {
+                name = js[f];
+                break;
+            }
         }
-        if (combined.fname && combined.lname) {
-            name = `${combined.fname} ${combined.lname}`.trim();
+        if (js.fname && js.lname) {
+            name = `${js.fname} ${js.lname}`.trim();
+        }
+        if (js.first_name && js.last_name) {
+            name = `${js.first_name} ${js.last_name}`.trim();
         }
         
-        // Extract EXPIRED
-        const expireFields = ['end_date', 'expire_date', 'expires', 'expiration', 
-                             'valid_until', 'valid_till', 'expiry', 'expire', 
-                             'account_expiry', 'sub_expiry', 'end', 'until',
-                             'trial_end', 'subscription_end', 'paid_to'];
+        // ==========================================================
+        //  EXTRACT EXPIRED - SEMUA FIELD (termasuk phone dari Python)
+        // ==========================================================
+        const expireFields = [
+            'end_date', 'expire_date', 'expires', 'expiration', 
+            'valid_until', 'valid_till', 'expiry', 'expire',
+            'account_expiry', 'sub_expiry', 'subscription_end',
+            'trial_end', 'paid_to', 'valid_to',
+            'date_end', 'date_expire',
+            'phone'
+        ];
+        
         let expire = '';
+        let foundExpire = false;
+        
         for (const f of expireFields) {
-            if (combined[f]) { expire = combined[f]; break; }
+            if (js[f] !== undefined && js[f] !== null && js[f] !== '') {
+                const val = String(js[f]);
+                
+                // SKIP angka > 10000 (channel count!)
+                if (!isNaN(Number(val)) && Number(val) > 10000) {
+                    console.log(`⏭️ Skipping ${f}=${val} (channel count)`);
+                    continue;
+                }
+                
+                // SKIP jika nilainya "0" atau "null"
+                if (val === '0' || val === 'null' || val === 'undefined') {
+                    continue;
+                }
+                
+                expire = val;
+                foundExpire = true;
+                console.log(`✅ Found expire from ${f}: ${val}`);
+                break;
+            }
         }
         
-        // Format tanggal Stalker biasanya timestamp
-        if (expire && !isNaN(Number(expire)) && String(expire).length === 10) {
-            expire = new Date(Number(expire) * 1000).toISOString().split('T')[0];
+        // Jika belum ditemukan, coba di nested object
+        if (!foundExpire) {
+            const nestedPaths = [js?.user, js?.account, js?.subscriber, js?.profile];
+            for (const obj of nestedPaths) {
+                if (obj && typeof obj === 'object') {
+                    for (const f of expireFields) {
+                        if (obj[f] && obj[f] !== '') {
+                            const val = String(obj[f]);
+                            if (!isNaN(Number(val)) && Number(val) > 10000) continue;
+                            expire = val;
+                            foundExpire = true;
+                            console.log(`✅ Found expire from nested.${f}: ${val}`);
+                            break;
+                        }
+                    }
+                    if (foundExpire) break;
+                }
+            }
         }
         
-        // Extract STATUS
+        // ==========================================================
+        //  FORMAT EXPIRED
+        // ==========================================================
+        if (expire && !isNaN(Number(expire)) && Number(expire) > 0) {
+            const numVal = Number(expire);
+            
+            // Unix timestamp (10 digit) - STALKER STANDARD
+            if (String(expire).length === 10) {
+                const date = new Date(numVal * 1000);
+                if (!isNaN(date.getTime()) && date.getFullYear() > 2000) {
+                    expire = date.toISOString().split('T')[0];
+                    console.log(`📅 Formatted Unix timestamp: ${expire}`);
+                }
+            }
+            // Milliseconds (13 digit)
+            else if (String(expire).length === 13) {
+                const date = new Date(numVal);
+                if (!isNaN(date.getTime()) && date.getFullYear() > 2000) {
+                    expire = date.toISOString().split('T')[0];
+                    console.log(`📅 Formatted milliseconds: ${expire}`);
+                }
+            }
+            // Days remaining (1-365)
+            else if (numVal > 0 && numVal < 365) {
+                expire = `${numVal} days left`;
+                console.log(`📅 Days remaining: ${expire}`);
+            }
+            // Sudah format YYYY-MM-DD
+            else if (/^\d{4}-\d{2}-\d{2}/.test(expire)) {
+                console.log(`📅 Already date format: ${expire}`);
+            }
+        }
+        
+        // ==========================================================
+        //  EXTRACT STATUS
+        // ==========================================================
         const statusFields = ['status', 'account_status', 'state', 'is_active', 
                              'active', 'enabled', 'verified', 'blocked'];
         let status = '';
         for (const f of statusFields) {
-            if (combined[f] !== undefined && combined[f] !== null) {
-                status = String(combined[f]);
+            if (js[f] !== undefined && js[f] !== null) {
+                status = String(js[f]);
                 break;
             }
         }
         if (status === 'true' || status === '1') status = 'Active';
         if (status === 'false' || status === '0') status = 'Inactive';
-        if (combined.blocked === 1 || combined.blocked === true) status = 'Blocked';
+        if (js.blocked === 1 || js.blocked === true) status = 'Blocked';
         
-        console.log(`👤 EXTRACTED → Name:"${name}" | Expire:"${expire}" | Status:"${status}"`);
+        // ==========================================================
+        //  FINAL LOG
+        // ==========================================================
+        console.log(`👤 FINAL → Name:"${name || '(empty)'}" | Expire:"${expire || '(empty)'}" | Status:"${status || '(empty)'}"`);
+        console.log("🔍 ===== END PROFILE =====\n");
         
-        return { name, expire, status };
+        return { 
+            name: name || '', 
+            expire: expire || '—', 
+            status: status || '' 
+        };
         
     } catch (error) {
-        console.error('GetProfile error:', error);
-        return { name: '', expire: '', status: '' };
+        console.error('❌ GetProfile error:', error);
+        return { name: '', expire: '—', status: '' };
     }
 }
 
@@ -751,7 +835,7 @@ async function countChannels(portal, mac) {
 }
 
 // ============================================================
-//  TEST STREAM
+//  TEST STREAM - Dengan deteksi URL tidak valid
 // ============================================================
 async function testStream(portal, mac) {
     try {
@@ -833,6 +917,9 @@ async function testStream(portal, mac) {
         
         console.log("🔗 RAW URL:", raw);
         
+        // ==========================================================
+        //  EKSTRAK URL DARI RAW
+        // ==========================================================
         let streamUrl = '';
         const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
         if (urlMatch) {
@@ -853,12 +940,44 @@ async function testStream(portal, mac) {
         
         console.log("🎬 Stream URL found:", streamUrl);
         
-        // Test stream via proxy
+        // ==========================================================
+        //  DETEKSI URL TIDAK VALID
+        // ==========================================================
+        try {
+            const urlObj = new URL(streamUrl);
+            const params = urlObj.searchParams;
+            
+            const playToken = params.get('play_token') || params.get('token') || '';
+            const v = params.get('v') || '';
+            const m = params.get('m') || '';
+            const stream = params.get('stream') || '';
+            
+            // Deteksi URL tidak valid
+            const isInvalid = (
+                playToken === '0' || 
+                playToken === '' || 
+                v === '0' || 
+                m === '0' ||
+                stream === '' ||
+                streamUrl.includes('video.php')
+            );
+            
+            if (isInvalid) {
+                console.log("⚠️ Detected INVALID stream URL (play_token=0 or v=0 or video.php)");
+                return { ok: false, url: streamUrl };
+            }
+        } catch (e) {
+            console.log("⚠️ Could not parse URL, skipping validation");
+        }
+        
+        // ==========================================================
+        //  TEST STREAM VIA PROXY
+        // ==========================================================
         try {
             const proxyTestUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
             
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
             
             const testResponse = await fetch(proxyTestUrl, {
                 method: 'GET',
