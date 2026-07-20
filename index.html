@@ -296,6 +296,36 @@
             border-radius: 4px;
             color: #a5f3fc;
         }
+        .storage-info {
+            background: #1e293b;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .storage-info code {
+            color: #a5f3fc;
+            background: #0f172a;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .btn-save-macs {
+            padding: 4px 12px;
+            font-size: 11px;
+            background: #3b82f6;
+            border-radius: 6px;
+            border: none;
+            color: white;
+            cursor: pointer;
+        }
+        .btn-save-macs:hover {
+            background: #2563eb;
+        }
         @media (max-width: 768px) {
             .card { padding: 16px; }
             .mac-row { flex-wrap: wrap; }
@@ -323,8 +353,17 @@
 
         <hr class="separator">
 
-        <div style="font-family:monospace; margin:12px 0 4px 0;">
+        <div style="font-family:monospace; margin:12px 0 4px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
             <b style="font-size:13px;">🔲 Daftar MAC Address (maks 10):</b>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-save-macs" onclick="saveMACsToStorage()">💾 Simpan MAC</button>
+                <button class="btn-save-macs" onclick="loadMACsFromStorage()" style="background:#f59e0b;">📥 Load MAC</button>
+                <button class="btn-save-macs" onclick="clearMACsStorage()" style="background:#ef4444;">🗑️ Hapus</button>
+            </div>
+        </div>
+        <div class="storage-info">
+            <span>💡 MAC tersimpan di browser Anda (LocalStorage) — tidak hilang setelah deploy!</span>
+            <span id="macCountStatus">0 MAC tersimpan</span>
         </div>
         <div id="macInputs"></div>
 
@@ -379,6 +418,8 @@
 //  KONFIGURASI
 // ============================================================
 const PROXY = '/api/proxy?url=';
+const STORAGE_KEY = 'mac_tester_macs';
+const PORTAL_KEY = 'mac_tester_portal';
 
 // ============================================================
 //  GLOBAL VARIABLES
@@ -389,6 +430,92 @@ let isRunning = false;
 
 // Session data per MAC (disimpan di browser)
 const sessionData = {};
+
+// ============================================================
+//  LOCALSTORAGE FUNCTIONS
+// ============================================================
+function saveMACsToStorage() {
+    const macs = [];
+    for (let i = 0; i < MAX_MAC; i++) {
+        const input = document.getElementById(`mac_${i}`);
+        if (input && input.value.trim()) {
+            macs.push(input.value.trim());
+        }
+    }
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(macs));
+        const portal = document.getElementById('portalUrl').value.trim();
+        if (portal) {
+            localStorage.setItem(PORTAL_KEY, portal);
+        }
+        updateMacCountStatus(macs.length);
+        addLog(`💾 Saved ${macs.length} MACs to browser storage`, 'success');
+    } catch (e) {
+        addLog('❌ Failed to save MACs: ' + e.message, 'error');
+    }
+}
+
+function loadMACsFromStorage() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const macs = JSON.parse(saved);
+            for (let i = 0; i < Math.min(macs.length, MAX_MAC); i++) {
+                const input = document.getElementById(`mac_${i}`);
+                if (input) input.value = macs[i];
+            }
+            updateMacCountStatus(macs.length);
+            addLog(`📥 Loaded ${macs.length} saved MACs`, 'success');
+        } else {
+            addLog('ℹ️ No saved MACs found', 'info');
+        }
+        
+        // Load portal
+        const portal = localStorage.getItem(PORTAL_KEY);
+        if (portal) {
+            document.getElementById('portalUrl').value = portal;
+        }
+    } catch (e) {
+        addLog('❌ Failed to load MACs: ' + e.message, 'error');
+    }
+}
+
+function clearMACsStorage() {
+    if (confirm('Hapus semua MAC tersimpan di browser?')) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(PORTAL_KEY);
+        for (let i = 0; i < MAX_MAC; i++) {
+            const input = document.getElementById(`mac_${i}`);
+            if (input) input.value = '';
+        }
+        updateMacCountStatus(0);
+        addLog('🗑️ Cleared saved MACs', 'info');
+    }
+}
+
+function updateMacCountStatus(count) {
+    const el = document.getElementById('macCountStatus');
+    if (el) {
+        el.textContent = count + ' MAC tersimpan';
+        el.style.color = count > 0 ? '#22c55e' : '#64748b';
+    }
+}
+
+function autoSaveMACs() {
+    const macs = [];
+    let hasValue = false;
+    for (let i = 0; i < MAX_MAC; i++) {
+        const input = document.getElementById(`mac_${i}`);
+        if (input && input.value.trim()) {
+            macs.push(input.value.trim());
+            hasValue = true;
+        }
+    }
+    if (hasValue) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(macs));
+        updateMacCountStatus(macs.length);
+    }
+}
 
 // ============================================================
 //  UI INITIALIZATION
@@ -411,6 +538,10 @@ function initUI() {
         input.id = `mac_${i}`;
         input.dataset.index = i;
         
+        // Auto-save on input change
+        input.addEventListener('input', autoSaveMACs);
+        input.addEventListener('change', autoSaveMACs);
+        
         const status = document.createElement('span');
         status.className = 'mac-status';
         status.id = `status_${i}`;
@@ -427,6 +558,9 @@ function initUI() {
     slider.addEventListener('input', function() {
         valueDisplay.textContent = this.value;
     });
+    
+    // Load saved data
+    loadMACsFromStorage();
 }
 
 function switchTab(tabName) {
@@ -598,24 +732,19 @@ async function doHandshake(portal, mac) {
 }
 
 // ============================================================
-//  GET PROFILE - Dengan debug log lengkap
+//  GET PROFILE
 // ============================================================
 async function getProfile(portal, mac) {
     try {
-        // Test endpoint utama
         const result = await stalkerRequest(portal,
             { type: 'account_info', action: 'get_main_info' },
             {},
             { mac: mac }
         );
         
-        // ==========================================================
-        //  🔍 DEBUG LOG LENGKAP
-        // ==========================================================
         console.log("🔍 ===== PROFILE RESPONSE =====");
         console.log("🔍 RAW:", JSON.stringify(result, null, 2));
         
-        // Cek apakah response punya js
         if (!result) {
             console.log("⚠️ Response kosong!");
             return { name: '', expire: '—', status: '' };
@@ -635,9 +764,7 @@ async function getProfile(portal, mac) {
         console.log("🔍 ALL KEYS:", Object.keys(js));
         console.log("🔍 ============================");
         
-        // ==========================================================
-        //  EXTRACT NAMA
-        // ==========================================================
+        // Extract NAMA
         const nameFields = ['fname', 'first_name', 'name', 'login', 'username', 
                            'full_name', 'display_name', 'nickname', 'user',
                            'account_name', 'subscriber_name'];
@@ -655,9 +782,7 @@ async function getProfile(portal, mac) {
             name = `${js.first_name} ${js.last_name}`.trim();
         }
         
-        // ==========================================================
-        //  EXTRACT EXPIRED - SEMUA FIELD (termasuk phone dari Python)
-        // ==========================================================
+        // Extract EXPIRED
         const expireFields = [
             'end_date', 'expire_date', 'expires', 'expiration', 
             'valid_until', 'valid_till', 'expiry', 'expire',
@@ -674,13 +799,11 @@ async function getProfile(portal, mac) {
             if (js[f] !== undefined && js[f] !== null && js[f] !== '') {
                 const val = String(js[f]);
                 
-                // SKIP angka > 10000 (channel count!)
                 if (!isNaN(Number(val)) && Number(val) > 10000) {
                     console.log(`⏭️ Skipping ${f}=${val} (channel count)`);
                     continue;
                 }
                 
-                // SKIP jika nilainya "0" atau "null"
                 if (val === '0' || val === 'null' || val === 'undefined') {
                     continue;
                 }
@@ -692,7 +815,6 @@ async function getProfile(portal, mac) {
             }
         }
         
-        // Jika belum ditemukan, coba di nested object
         if (!foundExpire) {
             const nestedPaths = [js?.user, js?.account, js?.subscriber, js?.profile];
             for (const obj of nestedPaths) {
@@ -712,42 +834,31 @@ async function getProfile(portal, mac) {
             }
         }
         
-        // ==========================================================
-        //  FORMAT EXPIRED
-        // ==========================================================
+        // Format EXPIRED
         if (expire && !isNaN(Number(expire)) && Number(expire) > 0) {
             const numVal = Number(expire);
             
-            // Unix timestamp (10 digit) - STALKER STANDARD
             if (String(expire).length === 10) {
                 const date = new Date(numVal * 1000);
                 if (!isNaN(date.getTime()) && date.getFullYear() > 2000) {
                     expire = date.toISOString().split('T')[0];
                     console.log(`📅 Formatted Unix timestamp: ${expire}`);
                 }
-            }
-            // Milliseconds (13 digit)
-            else if (String(expire).length === 13) {
+            } else if (String(expire).length === 13) {
                 const date = new Date(numVal);
                 if (!isNaN(date.getTime()) && date.getFullYear() > 2000) {
                     expire = date.toISOString().split('T')[0];
                     console.log(`📅 Formatted milliseconds: ${expire}`);
                 }
-            }
-            // Days remaining (1-365)
-            else if (numVal > 0 && numVal < 365) {
+            } else if (numVal > 0 && numVal < 365) {
                 expire = `${numVal} days left`;
                 console.log(`📅 Days remaining: ${expire}`);
-            }
-            // Sudah format YYYY-MM-DD
-            else if (/^\d{4}-\d{2}-\d{2}/.test(expire)) {
+            } else if (/^\d{4}-\d{2}-\d{2}/.test(expire)) {
                 console.log(`📅 Already date format: ${expire}`);
             }
         }
         
-        // ==========================================================
-        //  EXTRACT STATUS
-        // ==========================================================
+        // Extract STATUS
         const statusFields = ['status', 'account_status', 'state', 'is_active', 
                              'active', 'enabled', 'verified', 'blocked'];
         let status = '';
@@ -761,9 +872,6 @@ async function getProfile(portal, mac) {
         if (status === 'false' || status === '0') status = 'Inactive';
         if (js.blocked === 1 || js.blocked === true) status = 'Blocked';
         
-        // ==========================================================
-        //  FINAL LOG
-        // ==========================================================
         console.log(`👤 FINAL → Name:"${name || '(empty)'}" | Expire:"${expire || '(empty)'}" | Status:"${status || '(empty)'}"`);
         console.log("🔍 ===== END PROFILE =====\n");
         
@@ -835,11 +943,10 @@ async function countChannels(portal, mac) {
 }
 
 // ============================================================
-//  TEST STREAM — Sederhana & Akurat (HANYA cek play_token=0 dan video.php)
+//  TEST STREAM — Sederhana & Akurat
 // ============================================================
 async function testStream(portal, mac) {
     try {
-        // 1. Ambil channel list
         const listResult = await stalkerRequest(portal,
             { type: 'itv', action: 'get_ordered_list' },
             { genre: '*', p: '1' },
@@ -858,7 +965,6 @@ async function testStream(portal, mac) {
             return { ok: false, url: '' };
         }
         
-        // 2. Ambil channel pertama yang punya cmd
         const channel = data.find(ch => ch?.cmd);
         if (!channel) {
             console.log("⚠️ No cmd found");
@@ -867,14 +973,12 @@ async function testStream(portal, mac) {
         
         console.log("🎬 Channel:", channel.name, "| CMD:", channel.cmd.substring(0, 50));
         
-        // 3. Create link
         const linkResult = await stalkerRequest(portal,
             { type: 'itv', action: 'create_link' },
             { cmd: encodeURIComponent(channel.cmd) },
             { mac: mac }
         );
         
-        // 4. Extract URL
         let raw = '';
         const js = linkResult?.js || linkResult;
         if (typeof js === 'object' && js !== null) {
@@ -885,7 +989,6 @@ async function testStream(portal, mac) {
         
         if (!raw) raw = linkResult?.cmd || linkResult?.url || '';
         
-        // Extract URL dari string (ffmpeg http://... atau langsung http://...)
         const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
         let streamUrl = urlMatch ? urlMatch[1] : '';
         
@@ -896,17 +999,12 @@ async function testStream(portal, mac) {
         
         console.log("🔗 Stream URL:", streamUrl.substring(0, 80));
         
-        // 5. CEK VALIDITAS — HANYA 2 KRITERIA
+        // CEK VALIDITAS — HANYA 2 KRITERIA
         try {
             const urlObj = new URL(streamUrl);
             const params = urlObj.searchParams;
-            
-            // Cek play_token (bisa bernama 'play_token' atau 'token')
             const token = params.get('play_token') || params.get('token') || '';
             
-            // INVALID hanya jika:
-            // - play_token = '0' (string nol)
-            // - URL mengandung 'video.php' (bukan live)
             const isInvalid = (token === '0') || streamUrl.includes('video.php');
             
             if (isInvalid) {
@@ -920,7 +1018,7 @@ async function testStream(portal, mac) {
             console.log("⚠️ URL parse error, tapi lanjut test");
         }
         
-        // 6. TEST VIA PROXY — cukup 1 kali dengan HEAD
+        // TEST VIA PROXY
         try {
             const proxyUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
             
@@ -935,7 +1033,6 @@ async function testStream(portal, mac) {
             
             clearTimeout(t);
             
-            // Stream aktif kalau: 200, 206 (partial), 302/301 (redirect)
             const isLive = resp.status === 200 || resp.status === 206 || 
                           resp.status === 302 || resp.status === 301;
             
@@ -943,7 +1040,6 @@ async function testStream(portal, mac) {
             return { ok: isLive, url: streamUrl };
             
         } catch (err) {
-            // Proxy test gagal (timeout/CORS) → anggap HIDUP karena URL valid
             console.log("⚠️ Proxy test failed:", err.message, "→ Assume LIVE");
             return { ok: true, url: streamUrl };
         }
@@ -976,7 +1072,6 @@ async function testOneMAC(portal, mac, index, options) {
     try {
         const startTime = performance.now();
         
-        // STEP 1: HANDSHAKE (WAJIB SUKSES DULU)
         const token = await doHandshake(portal, mac);
         result.ping_ms = Math.round(performance.now() - startTime);
         
@@ -989,26 +1084,19 @@ async function testOneMAC(portal, mac, index, options) {
         result.token = token.substring(0, 16) + '...';
         result.online = true;
         
-        // Tunggu sebentar agar sessionData tersimpan
         await new Promise(r => setTimeout(r, 100));
         
-        // STEP 2: GET PROFILE (PAKAI TOKEN)
         if (options.profile) {
             const profile = await getProfile(portal, mac);
             result.name = profile.name;
             result.expire = profile.expire;
             result.acc_status = profile.status;
-            
-            if (!profile.name && !profile.expire) {
-                console.log(`⚠️ Profile kosong untuk ${mac}, mungkin token invalid atau endpoint salah`);
-            }
         }
         
-        // STEP 3: COUNT CHANNELS        if (options.channels) {
+        if (options.channels) {
             result.channels = await countChannels(portal, mac);
         }
         
-        // STEP 4: TEST STREAM
         if (options.stream) {
             const stream = await testStream(portal, mac);
             result.stream_ok = stream.ok;
@@ -1290,6 +1378,11 @@ function clearAll() {
     document.getElementById('btnRun').disabled = false;
     document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
     isRunning = false;
+    
+    // Clear saved MACs
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PORTAL_KEY);
+    updateMacCountStatus(0);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1313,12 +1406,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     addLog('📡 MAC Multi-Tester siap digunakan!', 'info');
     addLog('💡 Isi portal URL dan MAC address, lalu klik RUN', 'info');
-    addLog('🔧 Menggunakan proxy: /api/proxy', 'info');
+    addLog('🔧 MAC tersimpan otomatis di browser Anda (LocalStorage)', 'info');
 });
 
 window.switchTab = switchTab;
 window.runTest = runTest;
 window.clearAll = clearAll;
+window.saveMACsToStorage = saveMACsToStorage;
+window.loadMACsFromStorage = loadMACsFromStorage;
+window.clearMACsStorage = clearMACsStorage;
 </script>
 </body>
 </html>
