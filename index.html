@@ -296,36 +296,6 @@
             border-radius: 4px;
             color: #a5f3fc;
         }
-        .storage-info {
-            background: #1e293b;
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 11px;
-            color: #64748b;
-            margin-top: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .storage-info code {
-            color: #a5f3fc;
-            background: #0f172a;
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-        .btn-save-macs {
-            padding: 4px 12px;
-            font-size: 11px;
-            background: #3b82f6;
-            border-radius: 6px;
-            border: none;
-            color: white;
-            cursor: pointer;
-        }
-        .btn-save-macs:hover {
-            background: #2563eb;
-        }
         @media (max-width: 768px) {
             .card { padding: 16px; }
             .mac-row { flex-wrap: wrap; }
@@ -334,6 +304,7 @@
             table { font-size: 11px; min-width: 500px; }
         }
     </style>
+<base target="_blank">
 </head>
 <body>
 <div class="container">
@@ -353,17 +324,8 @@
 
         <hr class="separator">
 
-        <div style="font-family:monospace; margin:12px 0 4px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+        <div style="font-family:monospace; margin:12px 0 4px 0;">
             <b style="font-size:13px;">🔲 Daftar MAC Address (maks 10):</b>
-            <div style="display:flex; gap:8px;">
-                <button class="btn-save-macs" onclick="saveMACsToStorage()">💾 Simpan MAC</button>
-                <button class="btn-save-macs" onclick="loadMACsFromStorage()" style="background:#f59e0b;">📥 Load MAC</button>
-                <button class="btn-save-macs" onclick="clearMACsStorage()" style="background:#ef4444;">🗑️ Hapus</button>
-            </div>
-        </div>
-        <div class="storage-info">
-            <span>💡 MAC tersimpan di browser Anda (LocalStorage) — tidak hilang setelah deploy!</span>
-            <span id="macCountStatus">0 MAC tersimpan</span>
         </div>
         <div id="macInputs"></div>
 
@@ -417,13 +379,6 @@
 // ============================================================
 //  KONFIGURASI
 // ============================================================
-const PROXY = '/api/proxy?url=';
-const STORAGE_KEY = 'mac_tester_macs';
-const PORTAL_KEY = 'mac_tester_portal';
-
-// ============================================================
-//  GLOBAL VARIABLES
-// ============================================================
 const MAX_MAC = 10;
 const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
 let isRunning = false;
@@ -432,147 +387,54 @@ let isRunning = false;
 const sessionData = {};
 
 // ============================================================
-//  LOCALSTORAGE FUNCTIONS
-// ============================================================
-function saveMACsToStorage() {
-    const macs = [];
-    for (let i = 0; i < MAX_MAC; i++) {
-        const input = document.getElementById(`mac_${i}`);
-        if (input && input.value.trim()) {
-            macs.push(input.value.trim());
-        }
-    }
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(macs));
-        const portal = document.getElementById('portalUrl').value.trim();
-        if (portal) {
-            localStorage.setItem(PORTAL_KEY, portal);
-        }
-        updateMacCountStatus(macs.length);
-        addLog(`💾 Saved ${macs.length} MACs to browser storage`, 'success');
-    } catch (e) {
-        addLog('❌ Failed to save MACs: ' + e.message, 'error');
-    }
-}
-
-function loadMACsFromStorage() {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            const macs = JSON.parse(saved);
-            for (let i = 0; i < Math.min(macs.length, MAX_MAC); i++) {
-                const input = document.getElementById(`mac_${i}`);
-                if (input) input.value = macs[i];
-            }
-            updateMacCountStatus(macs.length);
-            addLog(`📥 Loaded ${macs.length} saved MACs`, 'success');
-        } else {
-            addLog('ℹ️ No saved MACs found', 'info');
-        }
-        
-        // Load portal
-        const portal = localStorage.getItem(PORTAL_KEY);
-        if (portal) {
-            document.getElementById('portalUrl').value = portal;
-        }
-    } catch (e) {
-        addLog('❌ Failed to load MACs: ' + e.message, 'error');
-    }
-}
-
-function clearMACsStorage() {
-    if (confirm('Hapus semua MAC tersimpan di browser?')) {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(PORTAL_KEY);
-        for (let i = 0; i < MAX_MAC; i++) {
-            const input = document.getElementById(`mac_${i}`);
-            if (input) input.value = '';
-        }
-        updateMacCountStatus(0);
-        addLog('🗑️ Cleared saved MACs', 'info');
-    }
-}
-
-function updateMacCountStatus(count) {
-    const el = document.getElementById('macCountStatus');
-    if (el) {
-        el.textContent = count + ' MAC tersimpan';
-        el.style.color = count > 0 ? '#22c55e' : '#64748b';
-    }
-}
-
-function autoSaveMACs() {
-    const macs = [];
-    let hasValue = false;
-    for (let i = 0; i < MAX_MAC; i++) {
-        const input = document.getElementById(`mac_${i}`);
-        if (input && input.value.trim()) {
-            macs.push(input.value.trim());
-            hasValue = true;
-        }
-    }
-    if (hasValue) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(macs));
-        updateMacCountStatus(macs.length);
-    }
-}
-
-// ============================================================
 //  UI INITIALIZATION
 // ============================================================
 function initUI() {
     const container = document.getElementById('macInputs');
     container.innerHTML = '';
-    
+
     for (let i = 0; i < MAX_MAC; i++) {
         const row = document.createElement('div');
         row.className = 'mac-row';
-        
+
         const num = document.createElement('span');
         num.className = 'mac-number';
         num.textContent = `${i+1}.`;
-        
+
         const input = document.createElement('input');
         input.type = 'text';
         input.placeholder = '00:1A:79:XX:XX:XX';
         input.id = `mac_${i}`;
         input.dataset.index = i;
-        
-        // Auto-save on input change
-        input.addEventListener('input', autoSaveMACs);
-        input.addEventListener('change', autoSaveMACs);
-        
+
         const status = document.createElement('span');
         status.className = 'mac-status';
         status.id = `status_${i}`;
         status.textContent = '—';
-        
+
         row.appendChild(num);
         row.appendChild(input);
         row.appendChild(status);
         container.appendChild(row);
     }
-    
+
     const slider = document.getElementById('parallelSlider');
     const valueDisplay = document.getElementById('parallelValue');
     slider.addEventListener('input', function() {
         valueDisplay.textContent = this.value;
     });
-    
-    // Load saved data
-    loadMACsFromStorage();
 }
 
 function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-    
+
     document.querySelectorAll('.tab-btn').forEach(btn => {
         if (btn.textContent.includes(tabName === 'result' ? '📊 Hasil' : '📋 Log')) {
             btn.classList.add('active');
         }
     });
-    
+
     document.getElementById(`tab-${tabName}`).classList.add('active');
 }
 
@@ -609,62 +471,52 @@ function getMACs() {
         const input = document.getElementById(`mac_${i}`);
         const val = input.value.trim();
         if (!val) continue;
-        
+
         const formatted = formatMAC(val);
         if (!MAC_REGEX.test(formatted)) {
             document.getElementById(`status_${i}`).textContent = '⚠️ Format salah';
             document.getElementById(`status_${i}`).style.color = '#f59e0b';
             continue;
         }
-        
+
         macs.push({ index: i, mac: formatted, raw: val });
     }
     return macs;
 }
 
 // ============================================================
-//  PROXY REQUEST - Kirim semua data dari browser
+//  PROXY REQUEST
 // ============================================================
 async function proxyRequest(url, options = {}) {
     const params = new URLSearchParams();
     params.set("url", url);
-    
-    if (options.mac) {
-        params.set("mac", options.mac);
-    }
-    
-    if (options.token) {
-        params.set("token", options.token);
-    }
-    
-    if (options.cookie) {
-        params.set("cookie", options.cookie);
-    }
-    
+
+    if (options.mac) params.set("mac", options.mac);
+    if (options.token) params.set("token", options.token);
+    if (options.cookie) params.set("cookie", options.cookie);
+
     const api = `/api/proxy?${params.toString()}`;
-    
+
     const response = await fetch(api, {
         method: 'GET',
-        headers: {
-            'Accept': 'application/json, text/plain, */*'
-        }
+        headers: { 'Accept': 'application/json, text/plain, */*' }
     });
-    
+
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Proxy error (${response.status}): ${errorText.substring(0, 100)}`);
     }
-    
+
     const text = await response.text();
     try {
         return JSON.parse(text);
     } catch {
-        throw new Error('Invalid JSON response from server');
+        return { raw: text };
     }
 }
 
 // ============================================================
-//  STALKER API FUNCTIONS
+//  STALKER REQUEST
 // ============================================================
 async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
     const url = new URL(`${portal}/portal.php`);
@@ -674,16 +526,13 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
         action: endpoint.action || '',
         JsHttpRequest: '1-xml'
     });
-    
+
     const mac = session.mac || '';
     const data = sessionData[mac] || {};
-    
-    // Build cookie string yang lengkap
+
     let cookieStr = `mac=${mac}; stb_lang=en; timezone=Europe%2FAmsterdam`;
-    if (data.cookie) {
-        cookieStr = data.cookie;
-    }
-    
+    if (data.cookie) cookieStr = data.cookie;
+
     return await proxyRequest(url.toString(), {
         mac: mac,
         token: data.token || '',
@@ -697,34 +546,25 @@ async function stalkerRequest(portal, endpoint, params = {}, session = {}) {
 async function doHandshake(portal, mac) {
     try {
         const result = await stalkerRequest(portal, 
-            { type: 'stb', action: 'handshake' },
-            {},
-            { mac: mac }
-        );
-        
+            { type: 'stb', action: 'handshake' }, {}, { mac: mac });
+
         console.log('🤝 HANDSHAKE RAW:', JSON.stringify(result).substring(0, 300));
-        
+
         let token = null;
         let cookieStr = `mac=${mac}; stb_lang=en; timezone=Europe%2FAmsterdam`;
-        
-        if (result.js && result.js.token) {
-            token = result.js.token;
-        } else if (result.token) {
-            token = result.token;
-        }
-        
+
+        if (result.js && result.js.token) token = result.js.token;
+        else if (result.token) token = result.token;
+
         if (token) {
-            sessionData[mac] = {
-                token: token,
-                cookie: cookieStr
-            };
+            sessionData[mac] = { token: token, cookie: cookieStr };
             console.log(`🔑 Token saved for ${mac}:`, token.substring(0, 20) + '...');
             return token;
         }
-        
+
         console.log('⚠️ No token in handshake response');
         return null;
-        
+
     } catch (error) {
         addLog(`Handshake failed for ${mac}: ${error.message}`, 'error');
         return null;
@@ -737,19 +577,16 @@ async function doHandshake(portal, mac) {
 async function getProfile(portal, mac) {
     try {
         const result = await stalkerRequest(portal,
-            { type: 'account_info', action: 'get_main_info' },
-            {},
-            { mac: mac }
-        );
-        
+            { type: 'account_info', action: 'get_main_info' }, {}, { mac: mac });
+
         console.log("🔍 ===== PROFILE RESPONSE =====");
         console.log("🔍 RAW:", JSON.stringify(result, null, 2));
-        
+
         if (!result) {
             console.log("⚠️ Response kosong!");
             return { name: '', expire: '—', status: '' };
         }
-        
+
         let js = result.js || result || {};
         if (typeof js === 'string') {
             try { 
@@ -760,61 +597,54 @@ async function getProfile(portal, mac) {
                 return { name: '', expire: '—', status: '' };
             }
         }
-        
+
         console.log("🔍 ALL KEYS:", Object.keys(js));
         console.log("🔍 ============================");
-        
-        // Extract NAMA
+
+        // EXTRACT NAMA
         const nameFields = ['fname', 'first_name', 'name', 'login', 'username', 
                            'full_name', 'display_name', 'nickname', 'user',
                            'account_name', 'subscriber_name'];
         let name = '';
         for (const f of nameFields) {
-            if (js[f] && js[f] !== '') {
-                name = js[f];
-                break;
-            }
+            if (js[f] && js[f] !== '') { name = js[f]; break; }
         }
-        if (js.fname && js.lname) {
-            name = `${js.fname} ${js.lname}`.trim();
-        }
-        if (js.first_name && js.last_name) {
-            name = `${js.first_name} ${js.last_name}`.trim();
-        }
-        
-        // Extract EXPIRED
+        if (js.fname && js.lname) name = `${js.fname} ${js.lname}`.trim();
+        if (js.first_name && js.last_name) name = `${js.first_name} ${js.last_name}`.trim();
+
+        // EXTRACT EXPIRED
         const expireFields = [
             'end_date', 'expire_date', 'expires', 'expiration', 
             'valid_until', 'valid_till', 'expiry', 'expire',
             'account_expiry', 'sub_expiry', 'subscription_end',
             'trial_end', 'paid_to', 'valid_to',
-            'date_end', 'date_expire',
-            'phone'
+            'date_end', 'date_expire', 'phone'
         ];
-        
+
         let expire = '';
         let foundExpire = false;
-        
+
         for (const f of expireFields) {
             if (js[f] !== undefined && js[f] !== null && js[f] !== '') {
                 const val = String(js[f]);
-                
+
+                // SKIP angka > 10000 (channel count!)
                 if (!isNaN(Number(val)) && Number(val) > 10000) {
                     console.log(`⏭️ Skipping ${f}=${val} (channel count)`);
                     continue;
                 }
-                
-                if (val === '0' || val === 'null' || val === 'undefined') {
-                    continue;
-                }
-                
+
+                // SKIP jika nilainya "0" atau "null"
+                if (val === '0' || val === 'null' || val === 'undefined') continue;
+
                 expire = val;
                 foundExpire = true;
                 console.log(`✅ Found expire from ${f}: ${val}`);
                 break;
             }
         }
-        
+
+        // Cek nested object
         if (!foundExpire) {
             const nestedPaths = [js?.user, js?.account, js?.subscriber, js?.profile];
             for (const obj of nestedPaths) {
@@ -833,32 +663,39 @@ async function getProfile(portal, mac) {
                 }
             }
         }
-        
-        // Format EXPIRED
+
+        // FORMAT EXPIRED
         if (expire && !isNaN(Number(expire)) && Number(expire) > 0) {
             const numVal = Number(expire);
-            
+
+            // Unix timestamp (10 digit) - STALKER STANDARD
             if (String(expire).length === 10) {
                 const date = new Date(numVal * 1000);
                 if (!isNaN(date.getTime()) && date.getFullYear() > 2000) {
                     expire = date.toISOString().split('T')[0];
                     console.log(`📅 Formatted Unix timestamp: ${expire}`);
                 }
-            } else if (String(expire).length === 13) {
+            }
+            // Milliseconds (13 digit)
+            else if (String(expire).length === 13) {
                 const date = new Date(numVal);
                 if (!isNaN(date.getTime()) && date.getFullYear() > 2000) {
                     expire = date.toISOString().split('T')[0];
                     console.log(`📅 Formatted milliseconds: ${expire}`);
                 }
-            } else if (numVal > 0 && numVal < 365) {
+            }
+            // Days remaining (1-365)
+            else if (numVal > 0 && numVal < 365) {
                 expire = `${numVal} days left`;
                 console.log(`📅 Days remaining: ${expire}`);
-            } else if (/^\d{4}-\d{2}-\d{2}/.test(expire)) {
+            }
+            // Sudah format YYYY-MM-DD
+            else if (/^\d{4}-\d{2}-\d{2}/.test(expire)) {
                 console.log(`📅 Already date format: ${expire}`);
             }
         }
-        
-        // Extract STATUS
+
+        // EXTRACT STATUS
         const statusFields = ['status', 'account_status', 'state', 'is_active', 
                              'active', 'enabled', 'verified', 'blocked'];
         let status = '';
@@ -871,16 +708,12 @@ async function getProfile(portal, mac) {
         if (status === 'true' || status === '1') status = 'Active';
         if (status === 'false' || status === '0') status = 'Inactive';
         if (js.blocked === 1 || js.blocked === true) status = 'Blocked';
-        
+
         console.log(`👤 FINAL → Name:"${name || '(empty)'}" | Expire:"${expire || '(empty)'}" | Status:"${status || '(empty)'}"`);
         console.log("🔍 ===== END PROFILE =====\n");
-        
-        return { 
-            name: name || '', 
-            expire: expire || '—', 
-            status: status || '' 
-        };
-        
+
+        return { name: name || '', expire: expire || '—', status: status || '' };
+
     } catch (error) {
         console.error('❌ GetProfile error:', error);
         return { name: '', expire: '—', status: '' };
@@ -893,49 +726,38 @@ async function getProfile(portal, mac) {
 async function countChannels(portal, mac) {
     try {
         const result = await stalkerRequest(portal,
-            { type: 'itv', action: 'get_all_channels' },
-            {},
-            { mac: mac }
-        );
-        
+            { type: 'itv', action: 'get_all_channels' }, {}, { mac: mac });
+
         console.log("📊 CHANNEL RAW:", result);
-        
+
         let data = [];
         let total = 0;
-        
+
         if (typeof result?.js === 'string') {
             try {
                 const parsedJs = JSON.parse(result.js);
-                if (parsedJs?.total_items) {
-                    total = parseInt(parsedJs.total_items);
-                }
-                if (parsedJs?.data && Array.isArray(parsedJs.data)) {
-                    data = parsedJs.data;
-                }
+                if (parsedJs?.total_items) total = parseInt(parsedJs.total_items);
+                if (parsedJs?.data && Array.isArray(parsedJs.data)) data = parsedJs.data;
             } catch (e) {}
         }
-        
+
         if (typeof result?.js === 'object' && result.js !== null) {
             if (result.js.data && Array.isArray(result.js.data)) {
                 data = result.js.data;
                 total = data.length;
             }
-            if (result.js.total_items) {
-                total = parseInt(result.js.total_items);
-            }
+            if (result.js.total_items) total = parseInt(result.js.total_items);
         }
-        
+
         if (!data.length && result?.data && Array.isArray(result.data)) {
             data = result.data;
             total = data.length;
         }
-        if (!total && result?.total_items) {
-            total = parseInt(result.total_items);
-        }
-        
+        if (!total && result?.total_items) total = parseInt(result.total_items);
+
         console.log("📊 CHANNEL COUNT:", total || data.length || 0);
         return total || data.length || 0;
-        
+
     } catch (error) {
         console.error('CountChannels error:', error);
         return 0;
@@ -947,38 +769,38 @@ async function countChannels(portal, mac) {
 // ============================================================
 async function testStream(portal, mac) {
     try {
+        // 1. Ambil channel list
         const listResult = await stalkerRequest(portal,
             { type: 'itv', action: 'get_ordered_list' },
-            { genre: '*', p: '1' },
-            { mac: mac }
-        );
-        
+            { genre: '*', p: '1' }, { mac: mac });
+
         let data = [];
         if (listResult?.js?.data && Array.isArray(listResult.js.data)) {
             data = listResult.js.data;
         } else if (listResult?.data && Array.isArray(listResult.data)) {
             data = listResult.data;
         }
-        
+
         if (!data.length) {
             console.log("⚠️ No channels");
             return { ok: false, url: '' };
         }
-        
+
+        // 2. Ambil channel pertama yang punya cmd
         const channel = data.find(ch => ch?.cmd);
         if (!channel) {
             console.log("⚠️ No cmd found");
             return { ok: false, url: '' };
         }
-        
+
         console.log("🎬 Channel:", channel.name, "| CMD:", channel.cmd.substring(0, 50));
-        
+
+        // 3. Create link
         const linkResult = await stalkerRequest(portal,
             { type: 'itv', action: 'create_link' },
-            { cmd: encodeURIComponent(channel.cmd) },
-            { mac: mac }
-        );
-        
+            { cmd: encodeURIComponent(channel.cmd) }, { mac: mac });
+
+        // 4. Extract URL
         let raw = '';
         const js = linkResult?.js || linkResult;
         if (typeof js === 'object' && js !== null) {
@@ -986,64 +808,72 @@ async function testStream(portal, mac) {
         } else if (typeof js === 'string') {
             try { raw = JSON.parse(js).cmd || JSON.parse(js).url || ''; } catch(e) {}
         }
-        
+
         if (!raw) raw = linkResult?.cmd || linkResult?.url || '';
-        
+
+        // Extract URL dari string
         const urlMatch = raw.match(/(https?:\/\/[^\s]+)/);
         let streamUrl = urlMatch ? urlMatch[1] : '';
-        
+
         if (!streamUrl) {
             console.log("⚠️ No URL extracted from:", raw.substring(0, 100));
             return { ok: false, url: '' };
         }
-        
+
         console.log("🔗 Stream URL:", streamUrl.substring(0, 80));
-        
-        // CEK VALIDITAS — HANYA 2 KRITERIA
+
+        // 5. CEK VALIDITAS — HANYA 2 KRITERIA
         try {
             const urlObj = new URL(streamUrl);
             const params = urlObj.searchParams;
+
+            // Cek play_token (bisa bernama 'play_token' atau 'token')
             const token = params.get('play_token') || params.get('token') || '';
-            
+
+            // INVALID hanya jika:
+            // - play_token = '0' (string nol)
+            // - URL mengandung 'video.php' (bukan live)
             const isInvalid = (token === '0') || streamUrl.includes('video.php');
-            
+
             if (isInvalid) {
                 console.log("⚠️ INVALID: play_token=0 atau video.php");
                 return { ok: false, url: streamUrl };
             }
-            
+
             console.log("✅ URL valid, play_token:", token.substring(0, 10) + "...");
-            
+
         } catch (e) {
             console.log("⚠️ URL parse error, tapi lanjut test");
         }
-        
-        // TEST VIA PROXY
+
+        // 6. TEST VIA PROXY — cukup 1 kali dengan HEAD
         try {
             const proxyUrl = `/api/proxy?url=${encodeURIComponent(streamUrl)}&mac=${mac}`;
-            
+
             const ctrl = new AbortController();
             const t = setTimeout(() => ctrl.abort(), 10000);
-            
+
             const resp = await fetch(proxyUrl, {
                 method: 'HEAD',
                 signal: ctrl.signal,
                 credentials: 'omit'
             });
-            
+
             clearTimeout(t);
-            
+
+            // Stream aktif kalau: 200, 206 (partial), 302/301 (redirect)
             const isLive = resp.status === 200 || resp.status === 206 || 
                           resp.status === 302 || resp.status === 301;
-            
+
             console.log("🎬 Proxy test:", resp.status, isLive ? "✅ LIVE" : "❌ DEAD");
             return { ok: isLive, url: streamUrl };
-            
+
         } catch (err) {
+            // Proxy test gagal (timeout/CORS) → anggap HIDUP karena URL valid
             console.log("⚠️ Proxy test failed:", err.message, "→ Assume LIVE");
             return { ok: true, url: streamUrl };
         }
-        
+
     } catch (error) {
         console.error("❌ testStream error:", error.message);
         return { ok: false, url: '' };
@@ -1068,46 +898,50 @@ async function testOneMAC(portal, mac, index, options) {
         ping_ms: 0,
         error: ''
     };
-    
+
     try {
         const startTime = performance.now();
-        
+
+        // STEP 1: HANDSHAKE
         const token = await doHandshake(portal, mac);
         result.ping_ms = Math.round(performance.now() - startTime);
-        
+
         if (!token) {
             result.error = 'Handshake failed - no token';
-            result.online = false;
             return result;
         }
-        
+
         result.token = token.substring(0, 16) + '...';
         result.online = true;
-        
+
+        // Tunggu sebentar agar sessionData tersimpan
         await new Promise(r => setTimeout(r, 100));
-        
+
+        // STEP 2: GET PROFILE
         if (options.profile) {
             const profile = await getProfile(portal, mac);
             result.name = profile.name;
             result.expire = profile.expire;
             result.acc_status = profile.status;
         }
-        
+
+        // STEP 3: COUNT CHANNELS
         if (options.channels) {
             result.channels = await countChannels(portal, mac);
         }
-        
+
+        // STEP 4: TEST STREAM
         if (options.stream) {
             const stream = await testStream(portal, mac);
             result.stream_ok = stream.ok;
             result.stream_url = stream.url;
         }
-        
+
     } catch (error) {
         result.error = error.message.substring(0, 100);
         result.online = false;
     }
-    
+
     return result;
 }
 
@@ -1119,7 +953,7 @@ function renderTable(results, portal, options) {
     const offline = results.filter(r => !r.online);
     const sorted = [...online.sort((a, b) => b.channels - a.channels), ...offline];
     const best = online.length ? online.reduce((a, b) => a.channels > b.channels ? a : b) : null;
-    
+
     let html = `
         <div style="font-family:monospace; margin-bottom:16px;">
             <div style="font-size:13px; color:#6b7280; margin-bottom:6px;">
@@ -1132,7 +966,7 @@ function renderTable(results, portal, options) {
                 <span style="color:#ef4444; font-weight:700;">❌ Gagal: ${offline.length}</span>
             </div>
     `;
-    
+
     if (best) {
         html += `
             <div class="best-mac-banner">
@@ -1144,7 +978,7 @@ function renderTable(results, portal, options) {
             </div>
         `;
     }
-    
+
     html += `
         <div style="overflow-x:auto; max-height:500px; overflow-y:auto;">
             <table>
@@ -1162,15 +996,15 @@ function renderTable(results, portal, options) {
                 </thead>
                 <tbody>
     `;
-    
+
     sorted.forEach(r => {
         const isOnline = r.online;
         const bg = isOnline ? '#f0fdf4' : '#fef2f2';
         const statusColor = isOnline ? '#16a34a' : '#dc2626';
         const statusText = isOnline ? '✅ ONLINE' : '❌ GAGAL';
-        
+
         const expireColor = getExpireColor(r.expire);
-        
+
         let streamCell = '';
         if (!options.stream) {
             streamCell = '<td style="text-align:center; color:#6b7280;">—</td>';
@@ -1179,10 +1013,10 @@ function renderTable(results, portal, options) {
         } else {
             streamCell = '<td style="text-align:center; color:#dc2626; font-weight:700;">❌ MATI</td>';
         }
-        
+
         const channelCell = `<td style="text-align:center; font-weight:700;">${options.channels ? r.channels : '—'}</td>`;
         const errorHtml = r.error ? `<br><span style="color:#ef4444; font-size:11px;">${r.error}</span>` : '';
-        
+
         html += `
             <tr style="background:${bg};">
                 <td style="text-align:center; color:#6b7280;">${r.no}</td>
@@ -1196,7 +1030,7 @@ function renderTable(results, portal, options) {
             </tr>
         `;
     });
-    
+
     html += `</tbody></table></div></div>`;
     return html;
 }
@@ -1222,7 +1056,7 @@ function exportCSV(results, portal) {
         r.stream_ok ? 'OK' : (r.stream_ok === false ? 'MATI' : '—'),
         r.ping_ms, r.error
     ]);
-    
+
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -1244,65 +1078,63 @@ async function runTest() {
         addLog('⚠️ Test sedang berjalan, tunggu sampai selesai', 'error');
         return;
     }
-    
-    for (const key in sessionData) {
-        delete sessionData[key];
-    }
-    
+
+    for (const key in sessionData) delete sessionData[key];
+
     document.getElementById('resultContainer').innerHTML = '';
     clearLog();
-    
+
     const portal = document.getElementById('portalUrl').value.trim().replace(/\/+$/, '');
     if (!validateURL(portal)) {
         addLog('❌ Portal URL tidak valid', 'error');
         document.getElementById('statusLabel').textContent = '❌ Portal URL tidak valid';
         return;
     }
-    
+
     const macList = getMACs();
     if (!macList.length) {
         addLog('⚠️ Tidak ada MAC valid', 'error');
         document.getElementById('statusLabel').textContent = '⚠️ Tidak ada MAC valid';
         return;
     }
-    
+
     macList.forEach(({ index }) => {
         const statusEl = document.getElementById(`status_${index}`);
         statusEl.textContent = '⏳ Menunggu...';
         statusEl.style.color = '#60a5fa';
     });
-    
+
     const options = {
         profile: document.getElementById('chkProfile').checked,
         channels: document.getElementById('chkChannels').checked,
         stream: document.getElementById('chkStream').checked,
         exportCSV: document.getElementById('chkExport').checked
     };
-    
+
     const parallel = parseInt(document.getElementById('parallelSlider').value);
-    
+
     isRunning = true;
     document.getElementById('btnRun').disabled = true;
     document.getElementById('btnRun').textContent = '⏳ Testing...';
     document.getElementById('statusLabel').textContent = `🔄 Testing ${macList.length} MAC ke ${portal}...`;
-    
+
     addLog(`🚀 Starting test on ${portal}`, 'info');
     addLog(`📊 ${macList.length} MAC | Parallel: ${parallel}`, 'info');
     addLog(`⚙️ Profile: ${options.profile} | Channels: ${options.channels} | Stream: ${options.stream}`, 'info');
-    
+
     const results = [];
     const total = macList.length;
     let completed = 0;
-    
+
     for (let i = 0; i < macList.length; i += parallel) {
         const batch = macList.slice(i, i + parallel);
         const promises = batch.map(({ index, mac }) => testOneMAC(portal, mac, index, options));
         const batchResults = await Promise.all(promises);
-        
+
         batchResults.forEach((result, idx) => {
             const macInfo = batch[idx];
             results.push(result);
-            
+
             const statusEl = document.getElementById(`status_${macInfo.index}`);
             if (result.online) {
                 const chText = options.channels ? ` | ${result.channels} ch` : '';
@@ -1314,7 +1146,7 @@ async function runTest() {
                 statusEl.textContent = `❌ GAGAL${err}`;
                 statusEl.style.color = '#dc2626';
             }
-            
+
             const status = result.online ? '✅ ONLINE' : '❌ GAGAL';
             let logMsg = `[${result.mac}] ${status} | ${result.ping_ms} ms`;
             if (options.channels) logMsg += ` | ${result.channels} ch`;
@@ -1322,30 +1154,28 @@ async function runTest() {
             if (result.error) logMsg += ` | ERR: ${result.error}`;
             addLog(logMsg, result.online ? 'success' : 'error');
         });
-        
+
         completed += batch.length;
         const progress = Math.round((completed / total) * 100);
         document.getElementById('progressFill').style.width = `${progress}%`;
         document.getElementById('progressText').textContent = `${progress}%`;
-        
+
         const onlineNow = results.filter(r => r.online).length;
         document.getElementById('statusLabel').textContent = `Progress: ${completed}/${total} | ✅ Online: ${onlineNow}`;
     }
-    
+
     document.getElementById('resultContainer').innerHTML = renderTable(results, portal, options);
-    
-    if (options.exportCSV) {
-        exportCSV(results, portal);
-    }
-    
+
+    if (options.exportCSV) exportCSV(results, portal);
+
     const onlineCount = results.filter(r => r.online).length;
     document.getElementById('statusLabel').textContent = `✅ Selesai — ${results.length} MAC | Online: ${onlineCount} | Gagal: ${results.length - onlineCount}`;
-    
+
     addLog(`\n${'='.repeat(50)}`, 'info');
     addLog(`✅ Selesai: ${results.length} MAC`, 'success');
     addLog(`✅ Online: ${onlineCount}`, 'success');
     addLog(`❌ Gagal: ${results.length - onlineCount}`, 'error');
-    
+
     isRunning = false;
     document.getElementById('btnRun').disabled = false;
     document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
@@ -1358,11 +1188,9 @@ function clearAll() {
         document.getElementById('btnRun').disabled = false;
         document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
     }
-    
-    for (const key in sessionData) {
-        delete sessionData[key];
-    }
-    
+
+    for (const key in sessionData) delete sessionData[key];
+
     document.getElementById('portalUrl').value = '';
     for (let i = 0; i < MAX_MAC; i++) {
         document.getElementById(`mac_${i}`).value = '';
@@ -1378,19 +1206,17 @@ function clearAll() {
     document.getElementById('btnRun').disabled = false;
     document.getElementById('btnRun').textContent = '🚀 RUN TEST SEMUA MAC';
     isRunning = false;
-    
-    // Clear saved MACs
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(PORTAL_KEY);
-    updateMacCountStatus(0);
 }
 
+// ============================================================
+//  EVENT LISTENERS
+// ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     initUI();
-    
+
     document.getElementById('btnRun').addEventListener('click', runTest);
     document.getElementById('btnClear').addEventListener('click', clearAll);
-    
+
     for (let i = 0; i < MAX_MAC; i++) {
         document.getElementById(`mac_${i}`).addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
@@ -1399,22 +1225,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     document.getElementById('portalUrl').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') document.getElementById('mac_0').focus();
     });
-    
+
     addLog('📡 MAC Multi-Tester siap digunakan!', 'info');
     addLog('💡 Isi portal URL dan MAC address, lalu klik RUN', 'info');
-    addLog('🔧 MAC tersimpan otomatis di browser Anda (LocalStorage)', 'info');
+    addLog('🔧 Menggunakan proxy: /api/proxy', 'info');
 });
 
 window.switchTab = switchTab;
 window.runTest = runTest;
 window.clearAll = clearAll;
-window.saveMACsToStorage = saveMACsToStorage;
-window.loadMACsFromStorage = loadMACsFromStorage;
-window.clearMACsStorage = clearMACsStorage;
 </script>
 </body>
 </html>
